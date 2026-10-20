@@ -4,6 +4,8 @@ import Darwin
 struct DiskScanner: Sendable {
     let policy: SafetyPolicy
     let largeFileThreshold: Int64
+    /// Projects and app data below this are noise in "大文件与工程" (config dirs, tiny .xcodeproj).
+    let minProjectBytes: Int64 = 200_000_000
 
     init(policy: SafetyPolicy = SafetyPolicy(), largeFileThreshold: Int64 = 1_000_000_000) {
         self.policy = policy
@@ -66,7 +68,7 @@ struct DiskScanner: Sendable {
         }
 
         if !metadata.isDirectory {
-            if policy.isProject(url), !insideProject, url != root, metadata.size >= 50_000_000 {
+            if policy.isProject(url), !insideProject, url != root, metadata.size >= minProjectBytes {
                 items.append(item(url, kind: .project, bytes: metadata.size, note: "工程文件；只提示占用，不提供删除操作。", canTrash: false, identity: metadata.identity))
             } else if !insideProject, url != root,
                       metadata.size >= largeFileThreshold || (metadata.size >= 100_000_000 && ["dmg", "pkg"].contains(url.pathExtension.lowercased())) {
@@ -100,7 +102,9 @@ struct DiskScanner: Sendable {
             sum = addition.overflow ? Int64.max : addition.partialValue
         }
         if url != root {
-            if project {
+            if project, sum < minProjectBytes {
+                // Too small to be worth listing; still counted in the parent total.
+            } else if project {
                 let note = url.lastPathComponent == "Figma" ? "Figma 本地数据可能包含未同步的离线改动；只显示占用，请在 Figma 内处理。" : "项目工程或应用数据；只显示占用，不提供删除操作。"
                 items.append(item(url, kind: .project, bytes: sum, note: note, canTrash: false, identity: metadata.identity))
             } else if let reviewNote {
@@ -116,8 +120,6 @@ struct DiskScanner: Sendable {
                 // Hide descendants of a suggested cache to avoid overlapping actions.
                 items.removeAll { $0.url.path.hasPrefix(url.path + "/") }
                 items.append(item(url, kind: .cache, bytes: sum, note: cacheNote, canTrash: true, identity: metadata.identity))
-            } else if depth == 1 {
-                items.append(item(url, kind: .folder, bytes: sum, note: "目录总量；仅供定位，不提供删除操作。", canTrash: false, identity: metadata.identity))
             }
         }
         return sum

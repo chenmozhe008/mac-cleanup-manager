@@ -26,7 +26,6 @@ enum Theme {
         case .caches: cyan
         case .review: amber
         case .large: violet
-        case .folders: slate
         }
     }
 }

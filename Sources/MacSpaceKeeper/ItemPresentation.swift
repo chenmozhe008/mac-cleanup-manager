@@ -32,6 +32,13 @@ enum ItemPresentation {
         "Service Worker": "Notion 离线缓存"
     ]
 
+    /// Cache folders whose name is not the app's bundle id or .app name.
+    private static let aliases: [String: (bundleID: String, title: String?)] = [
+        "LarkShell": ("com.electron.lark", nil),
+        "Google": ("com.google.Chrome", nil),
+        "Codex": ("com.openai.codex", "Codex")
+    ]
+
     static func info(for item: ScanItem) -> Info {
         if let hit = cache[item.id] { return hit }
         let value = resolve(item)
@@ -41,6 +48,10 @@ enum ItemPresentation {
 
     private static func resolve(_ item: ScanItem) -> Info {
         let name = item.name
+        if let alias = aliases[name], let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: alias.bundleID) {
+            let title = alias.title ?? FileManager.default.displayName(atPath: app.path).replacingOccurrences(of: ".app", with: "")
+            return Info(title: title, icon: NSWorkspace.shared.icon(forFile: app.path))
+        }
         if item.kind == .cache || item.kind == .folder, let app = application(for: name) {
             let title = FileManager.default.displayName(atPath: app.path).replacingOccurrences(of: ".app", with: "")
             return Info(title: title, icon: NSWorkspace.shared.icon(forFile: app.path))

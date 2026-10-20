@@ -227,7 +227,6 @@ enum ItemFilter: String, CaseIterable, Identifiable {
     case caches = "可放心清理"
     case review = "需要你判断"
     case large = "大文件与工程"
-    case folders = "目录占用"
     var id: String { rawValue }
 
     var symbol: String {
@@ -235,7 +234,6 @@ enum ItemFilter: String, CaseIterable, Identifiable {
         case .caches: "sparkles"
         case .review: "hand.raised"
         case .large: "shippingbox"
-        case .folders: "folder"
         }
     }
 
@@ -244,7 +242,6 @@ enum ItemFilter: String, CaseIterable, Identifiable {
         case .caches: kind == .cache
         case .review: kind == .review
         case .large: kind == .project || kind == .largeFile
-        case .folders: kind == .folder
         }
     }
 }

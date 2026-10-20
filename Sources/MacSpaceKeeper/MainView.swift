@@ -182,8 +182,7 @@ struct MainView: View {
             sectionHeader("分类").padding(.top, 14)
             ForEach(ItemFilter.allCases) { category in
                 let items = store.items(in: category)
-                // Folder totals only make sense for a full scan.
-                if category == .caches || (!items.isEmpty && !(category == .folders && store.result?.isQuickScan == true)) {
+                if category == .caches || !items.isEmpty {
                     categoryRow(category, bytes: totalBytes(items))
                 }
             }
@@ -604,7 +603,10 @@ struct MainView: View {
                 }
             }
             Spacer()
-            Button("移入废纸篓…") { store.showTrashConfirmation = true }
+            Button("移入废纸篓…") {
+                store.hoveredID = nil
+                store.showTrashConfirmation = true
+            }
                 .buttonStyle(CTAButtonStyle())
                 .disabled(empty || store.isCleaning)
                 .opacity(empty || store.isCleaning ? 0.4 : 1)
@@ -774,6 +776,7 @@ struct MainView: View {
                     }
                 }
             }
+            .frame(height: min(CGFloat(items.count) * 54, 300))
             .glass(radius: 12)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             HStack {
@@ -791,7 +794,8 @@ struct MainView: View {
             }
         }
         .padding(24)
-        .frame(width: 620, height: 480)
+        .frame(width: 620)
+        .fixedSize(horizontal: false, vertical: true)
         .foregroundStyle(Theme.ink)
         .background(Backdrop())
         .preferredColorScheme(.dark)
