@@ -38,6 +38,7 @@ struct MainView: View {
         .preferredColorScheme(.dark)
         .background(WindowDragEnabler())
         .sheet(isPresented: $store.showTrashConfirmation) { cleanupReviewSheet }
+        .sheet(isPresented: $store.showAbout) { AboutView(store: store) }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             store.refreshFullDiskAccess()
         }
@@ -108,7 +109,14 @@ struct MainView: View {
             }
             .frame(maxWidth: 900)
             .padding(.horizontal, 40)
-            .padding(.bottom, 36)
+            Button { store.showAbout = true } label: {
+                Text("v\(AppInfo.version) · \(AppInfo.author) · 关于与反馈")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Theme.ink3)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 16)
+            .padding(.bottom, 20)
         }
     }
 
@@ -385,6 +393,20 @@ struct MainView: View {
             }
             Spacer(minLength: 12)
             permissionCard
+            Button { store.showAbout = true } label: {
+                HStack(spacing: 6) {
+                    Text("v\(AppInfo.version) · \(AppInfo.author)").lineLimit(1).fixedSize()
+                    Spacer(minLength: 4)
+                    Text("关于")
+                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
+                }
+                .font(.system(size: 11.5))
+                .foregroundStyle(Theme.ink3)
+                .padding(.horizontal, 8)
+                .padding(.top, 8)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
         .padding(.top, 44)
         .padding(.horizontal, 10)

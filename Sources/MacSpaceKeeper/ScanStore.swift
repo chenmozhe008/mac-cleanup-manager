@@ -13,6 +13,7 @@ final class ScanStore: ObservableObject {
     @Published var selectedID: URL?
     @Published var selectedCleanupIDs: Set<URL> = []
     @Published var showTrashConfirmation = false
+    @Published var showAbout = false
     @Published var isCleaning = false
     @Published var cleanedCount = 0
     @Published var filter: ItemFilter = .caches {

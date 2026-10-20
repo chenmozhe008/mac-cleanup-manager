@@ -2,6 +2,12 @@
 
 原生 SwiftUI 磁盘扫描/缓存清理 App。功能说明看 README.md。
 
+## 版本与发布
+
+- 版本号写在 `script/build_and_run.sh` 的 `APP_VERSION`，构建号取 git 提交数；改版本时同步在 `CHANGELOG.md` 顶部加一节（App「关于」页直接读这个文件，别另写一份）
+- 作者 @沉默者之二、反馈邮箱在 `AboutView.swift` 的 `AppInfo`
+- GitHub 私有仓库：chenmozhe008/mac-cleanup-manager
+
 ## 构建与安装
 
 - 打包：`./script/build_and_run.sh --package` → `dist/Mac 清理管家.app`

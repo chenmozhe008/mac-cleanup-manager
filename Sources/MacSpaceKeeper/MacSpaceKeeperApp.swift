@@ -17,6 +17,9 @@ struct MacSpaceKeeperApp: App {
         .defaultSize(width: 1200, height: 780)
         .commands {
             CommandGroup(replacing: .newItem) { }
+            CommandGroup(replacing: .appInfo) {
+                Button("关于 Mac 清理管家") { store.showAbout = true }
+            }
             CommandMenu("扫描") {
                 Button("选择文件夹…") { store.chooseFolder() }
                     .keyboardShortcut("o", modifiers: .command)

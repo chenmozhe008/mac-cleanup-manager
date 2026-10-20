@@ -6,6 +6,7 @@ APP_NAME="Mac 清理管家"
 EXECUTABLE_NAME="MacSpaceKeeper"
 BUNDLE_ID="com.forwardyan.MacSpaceKeeper"
 MIN_SYSTEM_VERSION="14.0"
+APP_VERSION="1.0.0"
 CODESIGN_IDENTITY="${CODESIGN_IDENTITY:-Apple Development}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_BUNDLE="$ROOT_DIR/dist/$APP_NAME.app"
@@ -26,6 +27,8 @@ fi
 mkdir -p "$APP_BUNDLE/Contents/Resources"
 cp "$ROOT_DIR/Resources/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 cp "$ROOT_DIR/Resources/AppIcon-source.png" "$APP_BUNDLE/Contents/Resources/AppIcon-source.png"
+cp "$ROOT_DIR/CHANGELOG.md" "$APP_BUNDLE/Contents/Resources/CHANGELOG.md"
+BUILD_NUMBER="$(git -C "$ROOT_DIR" rev-list --count HEAD 2>/dev/null || echo 1)"
 
 cat >"$APP_BUNDLE/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -37,6 +40,9 @@ cat >"$APP_BUNDLE/Contents/Info.plist" <<PLIST
   <key>CFBundleName</key><string>$APP_NAME</string>
   <key>CFBundleDisplayName</key><string>$APP_NAME</string>
   <key>CFBundleIconFile</key><string>AppIcon.icns</string>
+  <key>CFBundleShortVersionString</key><string>$APP_VERSION</string>
+  <key>CFBundleVersion</key><string>$BUILD_NUMBER</string>
+  <key>NSHumanReadableCopyright</key><string>作者 @沉默者之二 · 反馈 327529709@qq.com</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>LSMinimumSystemVersion</key><string>$MIN_SYSTEM_VERSION</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
