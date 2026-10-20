@@ -23,7 +23,8 @@ final class ScanStore: ObservableObject {
     @Published var liveFound: [ScanItem] = []
     @Published var savedFolders: [URL] = []
     @Published var hasFullDiskAccess = false
-    @Published var chatAlertDismissed = false
+    /// Same-name rows (e.g. hundreds of __pycache__) that the user expanded.
+    @Published var expandedGroups: Set<String> = []
 
     let policy = SafetyPolicy()
     private var scanID = UUID()
@@ -94,17 +95,6 @@ final class ScanStore: ObservableObject {
         return names
     }
 
-    /// Chat apps worth a reminder: over 2 GB, or unreadable without Full Disk Access.
-    var chatAlerts: [ChatAppUsage] {
-        guard !chatAlertDismissed, let result else { return [] }
-        return result.chatApps.filter { ($0.bytes ?? 0) >= 2_000_000_000 }
-    }
-
-    var chatNeedsAccess: Bool {
-        guard !chatAlertDismissed, let result else { return false }
-        return result.chatApps.contains { $0.bytes == nil }
-    }
-
     /// Fraction of the last scan of the same scope, when one is known.
     var estimatedProgress: Double? {
         guard let expected = scanSizes[scopeKey], expected > 0 else { return nil }
@@ -139,6 +129,12 @@ final class ScanStore: ObservableObject {
     func selectReusable() {
         guard !isCleaning else { return }
         selectedCleanupIDs = Set(eligibleItems.filter { $0.risk == .a && CreativeApp.of($0) == nil }.map(\.id))
+    }
+
+    func setGroupSelected(_ items: [ScanItem], selected: Bool) {
+        guard !isCleaning else { return }
+        let ids = items.filter { $0.kind == .cache && $0.canTrash }.map(\.id)
+        if selected { selectedCleanupIDs.formUnion(ids) } else { selectedCleanupIDs.subtract(ids) }
     }
 
     func clearCleanupSelection() {
@@ -284,7 +280,6 @@ final class ScanStore: ObservableObject {
                 case .success(let value):
                     self.result = value
                     self.selectedCleanupIDs.removeAll()
-                    self.chatAlertDismissed = false
                     self.filter = ItemFilter.allCases.first { category in value.items.contains { category.contains($0) } } ?? .caches
                     self.selectedID = nil
                     self.scanSizes[self.scopeKey] = value.scannedCount

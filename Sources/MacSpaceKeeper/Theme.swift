@@ -160,3 +160,25 @@ struct UsageRing: View {
         }
     }
 }
+
+/// Top-bar actions: `prominent` is the primary (rescan), otherwise a clear secondary button.
+struct ToolbarButtonStyle: ButtonStyle {
+    var prominent = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: .semibold))
+            .labelStyle(.titleAndIcon)
+            .foregroundStyle(prominent ? Color.white : Theme.ink)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(prominent ? AnyShapeStyle(Theme.cta) : AnyShapeStyle(Color.white.opacity(configuration.isPressed ? 0.16 : 0.1)))
+            )
+            .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(prominent ? Color.white.opacity(0.18) : Color.white.opacity(0.2)))
+            .shadow(color: prominent ? Theme.indigo.opacity(0.55) : .clear, radius: 10, y: 4)
+            .opacity(configuration.isPressed ? 0.85 : 1)
+            .contentShape(Rectangle())
+    }
+}
