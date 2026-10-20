@@ -5,12 +5,8 @@ import SwiftUI
 struct MacSpaceKeeperApp: App {
     @StateObject private var store = ScanStore()
 
-    init() {
-        if let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
-           let icon = NSImage(contentsOf: url) {
-            NSApplication.shared.applicationIconImage = icon
-        }
-    }
+    // The Dock uses the bundle's AppIcon.icns. Setting applicationIconImage at runtime
+    // bypasses the system squircle mask and shows a raw square.
 
     var body: some Scene {
         WindowGroup("Mac 清理管家") {

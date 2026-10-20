@@ -91,7 +91,7 @@ struct SafetyPolicy: Sendable {
         // Library/Caches is a cache namespace, but only its direct children become actions.
         let libraryCaches = home.appending(path: "Library/Caches").path
         if CanonicalPath.url(url.deletingLastPathComponent()).path == libraryCaches {
-            if name.hasPrefix("com.apple.") || ["GeoServices", "SharedImageCache", "OTFileCache"].contains(name) {
+            if name.hasPrefix("com.apple.") || ["GeoServices", "SharedImageCache", "OTFileCache", "CloudKit", "FamilyCircle", "familycircled"].contains(name) {
                 return nil
             }
             if name == "Adobe" {

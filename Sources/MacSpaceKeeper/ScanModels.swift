@@ -44,6 +44,18 @@ struct ScanResult: Sendable {
     let scannedAt: Date
 }
 
+struct CleanupReport: Sendable {
+    struct Failure: Sendable, Identifiable {
+        let id: URL
+        let name: String
+        let reason: String
+    }
+
+    let movedCount: Int
+    let movedBytes: Int64
+    let failures: [Failure]
+}
+
 struct ScanProgress: Sendable {
     let scannedCount: Int
     let currentFolder: String

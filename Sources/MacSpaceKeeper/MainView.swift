@@ -48,6 +48,9 @@ struct MainView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
                     }
+                    if let report = store.cleanupReport {
+                        cleanupReportBanner(report)
+                    }
                     if store.isScanning {
                         scanningContent
                     } else if let result = store.result {
@@ -80,6 +83,60 @@ struct MainView: View {
             Spacer()
             brandIcon(44)
         }
+    }
+
+    private func cleanupReportBanner(_ report: CleanupReport) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Image(systemName: report.movedCount > 0 ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                    .foregroundStyle(report.movedCount > 0 ? .green : .orange)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(report.movedCount > 0
+                         ? "已移入废纸篓 \(report.movedCount.formatted()) 项 · \(ByteFormat.string(report.movedBytes))"
+                         : "没有项目被移动")
+                        .font(.headline)
+                    if report.movedCount > 0 {
+                        Text("清空废纸篓后才会真正释放空间。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+                Button { store.cleanupReport = nil } label: {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .help("关闭")
+            }
+            if !report.failures.isEmpty {
+                DisclosureGroup {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(report.failures) { failure in
+                            HStack(spacing: 8) {
+                                Text(failure.name)
+                                    .font(.caption.monospaced())
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Spacer(minLength: 8)
+                                Text(failure.reason)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .padding(.top, 6)
+                } label: {
+                    Text("\(report.failures.count) 项被系统拒绝，已跳过（不影响其他项）")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.leading, 26)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var welcomeContent: some View {

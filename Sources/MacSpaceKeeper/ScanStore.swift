@@ -9,6 +9,7 @@ final class ScanStore: ObservableObject {
     @Published var isScanning = false
     @Published var progress = ScanProgress(scannedCount: 0, currentFolder: "")
     @Published var message: String?
+    @Published var cleanupReport: CleanupReport?
     @Published var selectedID: URL?
     @Published var selectedCleanupIDs: Set<URL> = []
     @Published var showTrashConfirmation = false
@@ -94,6 +95,7 @@ final class ScanStore: ObservableObject {
         selectedID = nil
         selectedCleanupIDs.removeAll()
         message = nil
+        cleanupReport = nil
         isScanning = false
         progress = ScanProgress(scannedCount: 0, currentFolder: "")
     }
@@ -114,7 +116,10 @@ final class ScanStore: ObservableObject {
         guard !isScanning, !isCleaning else { return }
         isScanning = true
         progress = ScanProgress(scannedCount: 0, currentFolder: root.path)
-        if clearMessage { message = nil }
+        if clearMessage {
+            message = nil
+            cleanupReport = nil
+        }
         let thisScan = UUID()
         scanID = thisScan
         let scanRoot = root
@@ -175,17 +180,21 @@ final class ScanStore: ObservableObject {
         isCleaning = true
         cleanedCount = 0
         message = nil
+        cleanupReport = nil
         let scanPolicy = policy
         Task.detached(priority: .userInitiated) { [weak self] in
             var moved: [URL] = []
-            var failures: [String] = []
+            var movedBytes: Int64 = 0
+            var failures: [CleanupReport.Failure] = []
             let service = TrashService(policy: scanPolicy)
             for item in items {
                 do {
                     _ = try service.moveToTrash(item)
                     moved.append(item.id)
+                    let addition = movedBytes.addingReportingOverflow(item.bytes)
+                    movedBytes = addition.overflow ? Int64.max : addition.partialValue
                 } catch {
-                    failures.append("\(item.name)：\(error.localizedDescription)")
+                    failures.append(CleanupReport.Failure(id: item.id, name: item.name, reason: TrashService.reason(for: error)))
                 }
                 let count = moved.count + failures.count
                 await MainActor.run { self?.cleanedCount = count }
@@ -194,9 +203,7 @@ final class ScanStore: ObservableObject {
                 guard let self else { return }
                 self.isCleaning = false
                 self.selectedCleanupIDs.subtract(moved)
-                let movedText = moved.isEmpty ? "没有项目被移动。" : "已将 \(moved.count) 项移入废纸篓；手动清空废纸篓后才会释放空间。"
-                let failureText = failures.isEmpty ? "" : " \(failures.count) 项未处理：\(failures.joined(separator: "；"))"
-                self.message = movedText + failureText
+                self.cleanupReport = CleanupReport(movedCount: moved.count, movedBytes: movedBytes, failures: failures)
                 if !moved.isEmpty { self.scan(clearMessage: false) }
             }
         }

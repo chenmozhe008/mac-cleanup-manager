@@ -18,6 +18,23 @@ struct TrashService {
         try FileManager.default.trashItem(at: url, resultingItemURL: &resultingURL)
         return resultingURL as URL? ?? url
     }
+
+    /// Short Chinese reason for the cleanup report; raw Foundation messages are long and English.
+    static func reason(for error: Error) -> String {
+        if let trashError = error as? TrashError { return trashError.errorDescription ?? "未处理" }
+        let nsError = error as NSError
+        if nsError.domain == NSCocoaErrorDomain {
+            switch nsError.code {
+            case NSFileWriteNoPermissionError, NSFileReadNoPermissionError: return "系统或其他账户的目录，没有权限移动"
+            case NSFileNoSuchFileError: return "已不存在"
+            default: break
+            }
+        }
+        if nsError.domain == NSPOSIXErrorDomain, [Int(EPERM), Int(EACCES)].contains(nsError.code) {
+            return "系统或其他账户的目录，没有权限移动"
+        }
+        return "移动失败"
+    }
 }
 
 enum TrashError: LocalizedError {

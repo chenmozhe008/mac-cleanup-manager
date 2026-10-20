@@ -78,7 +78,8 @@ struct DiskScanner: Sendable {
         }
 
         let project = policy.isProject(url)
-        let cacheNote = !insideProject ? policy.cacheDescription(for: url, isDirectory: true) : nil
+        // Skip caches we could not move anyway (root-owned or system-protected), so they never reach the cleanup list.
+        let cacheNote = !insideProject && isMovable(url) ? policy.cacheDescription(for: url, isDirectory: true) : nil
         let reviewNote = policy.reviewDescription(for: url, isDirectory: true)
         let children: [URL]
         if let allowedProtectedChildren {
@@ -149,6 +150,10 @@ struct DiskScanner: Sendable {
     }
 
     private func identity(_ url: URL) throws -> FileIdentity { try metadata(url).identity }
+
+    private func isMovable(_ url: URL) -> Bool {
+        access(url.path, W_OK) == 0 && access(url.deletingLastPathComponent().path, W_OK) == 0
+    }
 }
 
 enum ScanError: LocalizedError {
