@@ -68,14 +68,14 @@ enum AboutTab: String, CaseIterable, Identifiable {
 }
 
 /// Competitor facts from official sites and 2025–2026 reviews (checked 2026-10-21).
-/// Cells we could not verify say "官网未提及" instead of guessing.
+/// Cells we could not verify show "—" instead of a guess.
 private enum Comparison {
     static let products = ["CleanMyMac", "柠檬清理", "BuhoCleaner", "DaisyDisk", "Mac 清理管家"]
     static let rows: [(title: String, cells: [String])] = [
         ("价格", ["订阅制，约 $39.95/年起", "免费，开源", "买断约 $20–30；免费版只能自动清 3 GB", "$9.99 买断", "免费"]),
         ("怎么删", ["一键智能清理", "一键清理", "一键清理", "自己挑，直接永久删除", "逐项确认，只移入废纸篓，可找回"]),
-        ("微信 / 企业微信", ["官网未提及", "深度扫描并清理聊天软件文件", "官网未提及", "只按文件夹看大小", "只看大小、不碰数据，教你在微信里清"]),
-        ("剪辑软件缓存", ["官网未提及", "官网未提及", "官网未提及", "不区分", "AE / Final Cut / 达芬奇 / Blender 分开讲，该回软件清的给步骤"]),
+        ("微信 / 企业微信", ["—", "深度扫描并清理聊天软件文件", "—", "只按文件夹看大小", "只看大小、不碰数据，教你在微信里清"]),
+        ("剪辑软件缓存", ["—", "—", "—", "不区分", "AE / Final Cut / 达芬奇 / Blender 分开讲，该回软件清的给步骤"]),
         ("每一项看得懂吗", ["按类别汇总", "按类别汇总", "按类别汇总", "只有文件夹和大小", "App 图标 + 中文名 + 能不能删的理由"])
     ]
 }
@@ -106,7 +106,7 @@ struct AboutView: View {
             .padding(.horizontal, 32)
             .padding(.top, 28)
             .padding(.bottom, 20)
-            .frame(width: 880, height: 680)
+            .frame(width: 880, height: 724)
             .background(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .fill(LinearGradient(colors: [Color(red: 0.11, green: 0.17, blue: 0.39), Color(red: 0.08, green: 0.11, blue: 0.24), Color(red: 0.14, green: 0.1, blue: 0.32)],
@@ -197,7 +197,7 @@ struct AboutView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("和常见工具比").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink2)
                 comparisonTable
-                Text("对比信息来自各产品官网和 2025–2026 年公开评测（2026-10-21 查），产品更新后可能变化；查不到的写「官网未提及」。")
+                Text("以上信息整理自各产品官网和公开评测（2026 年 10 月），以各产品最新版本为准。")
                     .font(.system(size: 11.5))
                     .foregroundStyle(Theme.ink3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -247,7 +247,7 @@ struct AboutView: View {
                     ForEach(Array(row.cells.enumerated()), id: \.offset) { index, cell in
                         Text(cell)
                             .font(.system(size: 12.5, weight: index == last ? .medium : .regular))
-                            .foregroundStyle(index == last ? Color.white : (cell == "官网未提及" ? Theme.ink3 : Theme.ink2))
+                            .foregroundStyle(index == last ? Color.white : (cell == "—" ? Theme.ink3 : Theme.ink2))
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 10)
