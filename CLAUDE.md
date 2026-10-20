@@ -7,6 +7,8 @@
 - 版本号写在 `script/build_and_run.sh` 的 `APP_VERSION`，构建号取 git 提交数；改版本时同步在 `CHANGELOG.md` 顶部加一节（App「关于」页直接读这个文件，别另写一份）
 - 作者 @沉默者之二、反馈邮箱在 `AboutView.swift` 的 `AppInfo`；「关于」三页（介绍 / 更新记录 / 反馈），竞品对比数据在 `Comparison`（2026-10-21 查官网与评测，查不到的格子写「—」，别凭印象补；界面上不写这类内部说明）
 - 左栏扫描位置叫「快速扫描 / 完整扫描」（2026-10-21 定，别再叫「常见缓存 / 我的文件」）
+- 外观三选一（跟随系统/浅色/深色，`AppearanceMode`，同时设 `NSApp.appearance`）；颜色一律用 `Theme` 里的 adaptive 色和 `Theme.fill()`，**不要再写死 `Color.white`**（彩色底上的白字除外）
+- 导航：左栏顶部「总览」；子页（剪辑/微信）左上「‹ 总览」；再点当前位置也回总览；「关于与反馈」只在左栏底部一处
 - 视觉：macOS 26+ 卡片走原生 `glassEffect`（液态玻璃），窗口透明 + 背后模糊；更早系统回落磨砂（`Theme.glass`）
 - 磁盘可用空间一律**实时读** `volumeAvailableCapacityForImportantUsage`（与访达一致），不用扫描时存下的数
 - GitHub 私有仓库：chenmozhe008/mac-cleanup-manager

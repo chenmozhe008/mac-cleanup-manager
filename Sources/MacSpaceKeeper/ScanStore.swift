@@ -15,6 +15,12 @@ final class ScanStore: ObservableObject {
     @Published var showTrashConfirmation = false
     @Published var showAbout = false
     @Published var aboutTab: AboutTab = .intro
+    @Published var appearance: AppearanceMode = AppearanceMode(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "") ?? .system {
+        didSet {
+            UserDefaults.standard.set(appearance.rawValue, forKey: "appearance")
+            appearance.apply()
+        }
+    }
     @Published var isCleaning = false
     @Published var cleanedCount = 0
     @Published var filter: ItemFilter = .caches {
@@ -46,6 +52,7 @@ final class ScanStore: ObservableObject {
             .map { URL(fileURLWithPath: $0) }
             .filter { FileManager.default.fileExists(atPath: $0.path) }
         refreshFullDiskAccess()
+        appearance.apply()
         loadLastResult()
     }
 
@@ -159,6 +166,13 @@ final class ScanStore: ObservableObject {
         selectedCleanupIDs.subtract(eligibleInFilter.map(\.id))
     }
 
+    var isOverview: Bool { filter != .creative && filter != .chat }
+
+    func showOverview() {
+        if !isOverview { filter = .caches }
+        selectedID = nil
+    }
+
     func selectCategory(_ category: ItemFilter) {
         filter = category
         selectedID = nil
@@ -213,6 +227,11 @@ final class ScanStore: ObservableObject {
     /// Switch to a location and show its last result. Scanning only starts from the scan button.
     func selectLocation(_ url: URL, quick: Bool) {
         guard !isScanning, !isCleaning else { return }
+        // Clicking the location you're already on goes back to its overview.
+        if isCurrentScope(url, quick: quick), result != nil {
+            showOverview()
+            return
+        }
         setRoot(quick ? policy.home : url)
         quickMode = quick
         showSavedResult()
@@ -451,6 +470,38 @@ enum ItemFilter: String, CaseIterable, Identifiable {
         case .chat: return false
         case .review: return item.kind == .review && !creative
         case .large: return item.kind == .project || item.kind == .largeFile
+        }
+    }
+}
+
+enum AppearanceMode: String, CaseIterable, Identifiable {
+    case system = "跟随系统"
+    case light = "浅色"
+    case dark = "深色"
+    var id: String { rawValue }
+
+    var symbol: String {
+        switch self {
+        case .system: "circle.lefthalf.filled"
+        case .light: "sun.max.fill"
+        case .dark: "moon.fill"
+        }
+    }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
+        }
+    }
+
+    /// AppKit views (window blur, dynamic NSColors) follow NSApp.appearance, not SwiftUI's scheme.
+    @MainActor func apply() {
+        switch self {
+        case .system: NSApp.appearance = nil
+        case .light: NSApp.appearance = NSAppearance(named: .aqua)
+        case .dark: NSApp.appearance = NSAppearance(named: .darkAqua)
         }
     }
 }

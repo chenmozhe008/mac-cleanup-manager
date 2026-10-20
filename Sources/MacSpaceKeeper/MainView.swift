@@ -16,8 +16,10 @@ struct MainView: View {
     var body: some View {
         HStack(spacing: 0) {
             if showSidebar {
-                sidebar.frame(width: 232)
-                Rectangle().fill(Theme.line).frame(width: 1)
+                sidebar
+                    .frame(width: 256)
+                    .glass(radius: 20)
+                    .padding(10)
             }
             Group {
                 if store.isScanning {
@@ -35,7 +37,7 @@ struct MainView: View {
         .foregroundStyle(Theme.ink)
         .background(Backdrop())
         .ignoresSafeArea(.container, edges: .top)
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(store.appearance.colorScheme)
         .background(WindowDragEnabler())
         .sheet(isPresented: $store.showTrashConfirmation) { cleanupReviewSheet }
         .overlay {
@@ -196,7 +198,7 @@ struct MainView: View {
         HStack(spacing: 48) {
             VStack(spacing: 0) {
                 ZStack {
-                    Circle().stroke(Color.white.opacity(0.06), lineWidth: 3)
+                    Circle().stroke(Theme.fill(0.06), lineWidth: 3)
                     TimelineView(.animation) { context in
                         Circle()
                             .trim(from: 0, to: 0.22)
@@ -254,7 +256,7 @@ struct MainView: View {
                 GeometryReader { proxy in
                     let phase = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.6) / 1.6
                     ZStack(alignment: .leading) {
-                        Capsule().fill(Color.white.opacity(0.08))
+                        Capsule().fill(Theme.fill(0.08))
                         Capsule().fill(Theme.accent)
                             .frame(width: proxy.size.width * 0.3)
                             .offset(x: proxy.size.width * (phase * 1.3 - 0.3))
@@ -357,8 +359,9 @@ struct MainView: View {
                 }
             }
             .padding(.horizontal, 8)
-            .padding(.bottom, 8)
+            .padding(.bottom, 10)
 
+            if store.result != nil { overviewRow }
             sectionHeader("扫描位置")
             locationRow("快速扫描", icon: "bolt.fill", url: home, quick: true)
             locationRow("完整扫描", icon: "house.fill", url: home, quick: false)
@@ -366,7 +369,7 @@ struct MainView: View {
                 locationRow(volume.lastPathComponent, icon: "externaldrive.fill", url: volume, quick: false)
             }
             ForEach(store.savedFolders, id: \.self) { folder in
-                locationRow(folder.lastPathComponent, icon: "folder.fill", url: folder, quick: false)
+                locationRow(folder.lastPathComponent, icon: "folder.fill", url: folder, quick: false, removable: true)
                     .contextMenu {
                         Button("在访达中显示") { NSWorkspace.shared.activateFileViewerSelecting([folder]) }
                         Button("从列表移除") { store.removeSavedFolder(folder) }
@@ -389,37 +392,76 @@ struct MainView: View {
                         categoryRow(category, bytes: ScanStore.sum(items))
                     }
                 default:
-                    if category == .caches || !items.isEmpty {
+                    // Keep the sidebar in step with the six overview cards.
+                    if category == .caches || category == .large || !items.isEmpty {
                         categoryRow(category, bytes: ScanStore.sum(items))
                     }
                 }
             }
             Spacer(minLength: 12)
             permissionCard
+            appearancePicker
             Button { store.aboutTab = .intro; store.showAbout = true } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: "info.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Theme.cyan)
-                        .frame(width: 18)
-                    Text("关于与反馈").font(.system(size: 13.5))
+                    IconTile(symbol: "info", tint: Color(red: 0.56, green: 0.56, blue: 0.6), size: 28)
+                    Text("关于与反馈").font(.system(size: 14.5, weight: .medium))
                     Spacer(minLength: 4)
-                    Text("v\(AppInfo.version)").font(.system(size: 11.5)).foregroundStyle(Theme.ink3)
+                    Text("v\(AppInfo.version)").font(.system(size: 12)).foregroundStyle(Theme.ink3)
                 }
                 .foregroundStyle(Theme.ink)
                 .padding(.horizontal, 10)
-                .padding(.vertical, 9)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.05)))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.line))
+                .padding(.vertical, 10)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.fill(0.08)))
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .padding(.top, 6)
         }
-        .padding(.top, 44)
+        .padding(.top, 40)
         .padding(.horizontal, 10)
-        .padding(.bottom, 14)
-        .background(Color.white.opacity(0.03))
+        .padding(.bottom, 12)
+    }
+
+    private var appearancePicker: some View {
+        HStack(spacing: 4) {
+            ForEach(AppearanceMode.allCases) { mode in
+                let on = store.appearance == mode
+                Button { store.appearance = mode } label: {
+                    Image(systemName: mode.symbol)
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(on ? Theme.ink : Theme.ink3)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(on ? Theme.fill(0.14) : .clear))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .help("外观：\(mode.rawValue)")
+            }
+        }
+        .padding(3)
+        .background(Capsule().fill(Theme.fill(0.05)))
+        .padding(.top, 8)
+    }
+
+    private var overviewRow: some View {
+        let active = store.isOverview
+        return Button { withAnimation(.easeOut(duration: 0.15)) { store.showOverview() } } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "circle.lefthalf.filled")
+                    .font(.system(size: 14, weight: .medium))
+                    .frame(width: 24)
+                    .foregroundStyle(active ? Theme.cyan : Theme.ink2)
+                Text("总览").font(.system(size: 14.5, weight: .semibold))
+                Spacer(minLength: 4)
+            }
+            .foregroundStyle(active ? Theme.ink : Theme.ink2)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(active ? Theme.fill(0.13) : .clear))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func sectionHeader(_ title: String) -> some View {
@@ -432,41 +474,54 @@ struct MainView: View {
     }
 
     /// Clicking only switches to the location and shows its last result; scanning starts from the scan button.
-    private func locationRow(_ title: String, icon: String, url: URL, quick: Bool) -> some View {
+    private func locationRow(_ title: String, icon: String, url: URL, quick: Bool, removable: Bool = false) -> some View {
         let active = store.isCurrentScope(url, quick: quick)
+        let hovered = removable && store.hoveredID == url
         return Button { withAnimation(.easeOut(duration: 0.15)) { store.selectLocation(url, quick: quick) } } label: {
             HStack(spacing: 10) {
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .medium))
-                    .frame(width: 18)
+                    .frame(width: 24)
                     .foregroundStyle(active ? Theme.cyan : Theme.ink2)
                 Text(title).lineLimit(1).truncationMode(.middle)
                 Spacer(minLength: 4)
-                TimelineView(.everyMinute) { _ in
-                    Text(store.lastScanDate(url, quick: quick).map(Self.ago) ?? "未扫描")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Theme.ink3)
+                if hovered {
+                    Button { store.removeSavedFolder(url) } label: {
+                        Image(systemName: "xmark.circle.fill").font(.system(size: 14)).foregroundStyle(Theme.ink3)
+                    }
+                    .buttonStyle(.plain)
+                    .help("从列表移除（文件夹本身不会动）")
+                } else {
+                    TimelineView(.everyMinute) { _ in
+                        Text(store.lastScanDate(url, quick: quick).map(Self.ago) ?? "未扫描")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.ink3)
+                    }
                 }
             }
-            .font(.system(size: 13.5))
+            .font(.system(size: 14))
             .foregroundStyle(active ? Theme.ink : Theme.ink2)
             .padding(.horizontal, 8)
             .padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 8).fill(active ? Color.white.opacity(0.08) : .clear))
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(active ? Theme.fill(0.08) : .clear))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(store.isCleaning)
+        .onHover { inside in
+            guard removable else { return }
+            if inside { store.hoveredID = url } else if store.hoveredID == url { store.hoveredID = nil }
+        }
     }
 
     private var addFolderRow: some View {
         Button { store.chooseFolder() } label: {
             HStack(spacing: 10) {
-                Image(systemName: "plus").font(.system(size: 13, weight: .medium)).frame(width: 18)
+                Image(systemName: "plus").font(.system(size: 13, weight: .medium)).frame(width: 24)
                 Text("添加文件夹")
                 Spacer(minLength: 4)
             }
-            .font(.system(size: 13.5))
+            .font(.system(size: 14))
             .foregroundStyle(Theme.ink3)
             .padding(.horizontal, 8)
             .padding(.vertical, 7)
@@ -491,23 +546,19 @@ struct MainView: View {
         let tint = Theme.color(category)
         return Button { withAnimation(.easeOut(duration: 0.15)) { store.selectCategory(category) } } label: {
             HStack(spacing: 10) {
-                GlowDot(color: tint)
+                IconTile(symbol: Theme.symbol(category), tint: tint, size: 24)
                 Text(category.rawValue).lineLimit(1)
                 Spacer(minLength: 4)
                 Text(ByteFormat.string(bytes))
                     .font(.system(size: 12.5))
                     .monospacedDigit()
-                    .foregroundStyle(selected ? Color(red: 0.81, green: 0.88, blue: 1.0) : Theme.ink3)
+                    .foregroundStyle(selected ? Theme.softInk : Theme.ink3)
             }
-            .font(.system(size: 13.5))
-            .foregroundStyle(selected ? .white : Theme.ink2)
+            .font(.system(size: 14))
+            .foregroundStyle(selected ? Theme.ink : Theme.ink2)
             .padding(.horizontal, 8)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(selected ? AnyShapeStyle(LinearGradient(colors: [Theme.blue.opacity(0.28), Theme.blue.opacity(0.08)], startPoint: .leading, endPoint: .trailing)) : AnyShapeStyle(Color.clear))
-            )
-            .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(selected ? Theme.blue.opacity(0.35) : .clear))
+            .padding(.vertical, 6)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(selected ? Theme.fill(0.13) : .clear))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -580,22 +631,30 @@ struct MainView: View {
 
     private func topBar(_ result: ScanResult) -> some View {
         HStack(spacing: 10) {
-            Text(store.filter == .creative || store.filter == .chat ? store.filter.rawValue : store.scopeTitle)
-                .font(.system(size: 15, weight: .semibold))
+            if !store.isOverview {
+                Button { withAnimation(.easeOut(duration: 0.15)) { store.showOverview() } } label: {
+                    Label("总览", systemImage: "chevron.left")
+                }
+                .buttonStyle(ToolbarButtonStyle())
+                .keyboardShortcut("[", modifiers: .command)
+                .help("回到总览（⌘[）")
+            }
+            Text(store.isOverview ? store.scopeTitle : store.filter.rawValue)
+                .font(.system(size: 17, weight: .bold))
             Text(scanMeta(result))
                 .font(.system(size: 12.5))
                 .foregroundStyle(Theme.ink3)
                 .lineLimit(1)
             Spacer()
             Button { store.scan() } label: { Label("重新扫描", systemImage: "arrow.clockwise") }
-                .buttonStyle(ToolbarButtonStyle(prominent: true))
-                .help("重新扫描「\(store.scopeTitle)」")
-                .help("按当前范围重新扫描（⌘R）")
+                .buttonStyle(ToolbarButtonStyle(prominent: true, large: true))
+                .shadow(color: Theme.blue.opacity(0.45), radius: 10, y: 4)
+                .help("重新扫描「\(store.scopeTitle)」（⌘R）")
         }
         .disabled(store.isCleaning)
-        .padding(.horizontal, 22)
-        .frame(height: 52)
-        .overlay(alignment: .bottom) { Rectangle().fill(Theme.line).frame(height: 1) }
+        .padding(.leading, showSidebar ? 12 : 22)
+        .padding(.trailing, 18)
+        .frame(height: 62)
     }
 
     private func scanMeta(_ result: ScanResult) -> String {
@@ -618,7 +677,7 @@ struct MainView: View {
         let low = free < 6 * 1_073_741_824 || freeRatio < 0.05
         return ZStack {
             UsageRing(segments: [
-                .init(fraction: other / total, style: AnyShapeStyle(LinearGradient(colors: [Color(red: 0.36, green: 0.43, blue: 0.62), Color(red: 0.27, green: 0.33, blue: 0.5)], startPoint: .top, endPoint: .bottom))),
+                .init(fraction: other / total, style: AnyShapeStyle(Theme.track)),
                 .init(fraction: large / total, style: AnyShapeStyle(Theme.violet)),
                 .init(fraction: creative / total, style: AnyShapeStyle(Theme.pink)),
                 .init(fraction: review / total, style: AnyShapeStyle(Theme.amber)),
@@ -678,7 +737,7 @@ struct MainView: View {
         return Button { withAnimation(.easeOut(duration: 0.15)) { store.selectCategory(category) } } label: {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
-                    GlowDot(color: Theme.color(category))
+                    IconTile(symbol: Theme.symbol(category), tint: Theme.color(category), size: 18)
                     Text(category.rawValue)
                 }
                 .font(.system(size: 12.5))
@@ -713,7 +772,7 @@ struct MainView: View {
         return Button { withAnimation(.easeOut(duration: 0.15)) { store.selectCategory(.chat) } } label: {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
-                    GlowDot(color: Theme.green)
+                    IconTile(symbol: Theme.symbol(.chat), tint: Theme.green, size: 18)
                     Text(ItemFilter.chat.rawValue)
                 }
                 .font(.system(size: 12.5))
@@ -745,10 +804,10 @@ struct MainView: View {
         return VStack(alignment: .leading, spacing: 6) {
             Label("可释放空间", systemImage: "sparkles")
                 .font(.system(size: 12.5))
-                .foregroundStyle(Color(red: 0.81, green: 0.88, blue: 1.0))
+                .foregroundStyle(Theme.softInk)
             HStack(alignment: .firstTextBaseline, spacing: 5) {
                 Text(number).font(.system(size: 22, weight: .bold)).monospacedDigit()
-                Text("\(unit) · 清空废纸篓后释放").font(.system(size: 12.5)).foregroundStyle(Color(red: 0.72, green: 0.78, blue: 0.94)).lineLimit(1)
+                Text("\(unit) · 清空废纸篓后释放").font(.system(size: 12.5)).foregroundStyle(Theme.ink2).lineLimit(1)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -796,9 +855,19 @@ struct MainView: View {
         let maxBytes = max(groups.map(\.bytes).max() ?? 1, 1)
         return Group {
             if items.isEmpty {
-                VStack(spacing: 10) {
-                    Image(systemName: "checkmark.circle").font(.system(size: 30)).foregroundStyle(Theme.cyan)
-                    Text(store.filter == .caches ? "没有发现可清理缓存" : "这一类没有内容").font(.system(size: 13.5)).foregroundStyle(Theme.ink2)
+                VStack(spacing: 12) {
+                    if store.filter == .large && store.isQuickScope {
+                        // Quick scan never looks for large files: say so and offer the way forward.
+                        IconTile(symbol: Theme.symbol(.large), tint: Theme.violet, size: 44)
+                        Text("快速扫描不查找大文件和工程").font(.system(size: 15, weight: .semibold))
+                        Text("完整扫描会检查整个用户目录，大约需要几分钟。").font(.system(size: 13)).foregroundStyle(Theme.ink2)
+                        Button { store.scanLocation(home) } label: { Label("开始完整扫描", systemImage: "play.fill") }
+                            .buttonStyle(ToolbarButtonStyle(prominent: true, large: true))
+                            .padding(.top, 4)
+                    } else {
+                        Image(systemName: "checkmark.circle").font(.system(size: 30)).foregroundStyle(Theme.green)
+                        Text(store.filter == .caches ? "没有发现可清理的缓存" : "这一类没有发现内容").font(.system(size: 14)).foregroundStyle(Theme.ink2)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -843,7 +912,7 @@ struct MainView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(info.title)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Theme.ink)
                         .lineLimit(1)
                         .truncationMode(.middle)
                     Text(subtitle)
@@ -942,7 +1011,7 @@ struct MainView: View {
             } else {
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
                     .fill(pickedCount > 0 ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Color.clear))
-                    .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(pickedCount > 0 ? .clear : Color(red: 0.3, green: 0.36, blue: 0.52), lineWidth: 1.5))
+                    .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(pickedCount > 0 ? .clear : Theme.ink3, lineWidth: 1.5))
                     .overlay {
                         if pickedCount > 0 {
                             Image(systemName: allPicked ? "checkmark" : "minus").font(.system(size: 10, weight: .heavy)).foregroundStyle(.white)
@@ -954,13 +1023,13 @@ struct MainView: View {
             itemIcon(first, info: info)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 8) {
-                    Text(info.title).font(.system(size: 14, weight: .medium)).foregroundStyle(.white).lineLimit(1)
+                    Text(info.title).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.ink).lineLimit(1)
                     Text("\(group.items.count) 处")
                         .font(.system(size: 11.5, weight: .medium))
                         .foregroundStyle(Theme.ink2)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 2)
-                        .background(Capsule().fill(Color.white.opacity(0.08)))
+                        .background(Capsule().fill(Theme.fill(0.08)))
                     if pickedCount > 0 && !allPicked {
                         Text("已选 \(pickedCount)").font(.system(size: 11.5)).foregroundStyle(Theme.cyan)
                     }
@@ -990,7 +1059,7 @@ struct MainView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(allPicked ? Theme.cyan.opacity(0.08) : (hovered ? Color.white.opacity(0.07) : .clear))
+        .background(allPicked ? Theme.cyan.opacity(0.08) : (hovered ? Theme.fill(0.07) : .clear))
         .overlay(alignment: .leading) {
             if pickedCount > 0 { Rectangle().fill(Theme.cyan).frame(width: 3).shadow(color: Theme.cyan, radius: 4) }
         }
@@ -1031,7 +1100,7 @@ struct MainView: View {
     private func rowBackground(picked: Bool, expanded: Bool, hovered: Bool) -> Color {
         if expanded { return Theme.blue.opacity(0.14) }
         if picked { return Theme.cyan.opacity(hovered ? 0.12 : 0.08) }
-        return hovered ? Color.white.opacity(0.07) : .clear
+        return hovered ? Theme.fill(0.07) : .clear
     }
 
     private func toggleDetail(_ item: ScanItem) {
@@ -1245,7 +1314,7 @@ struct MainView: View {
                         Text(step)
                             .padding(.horizontal, 7)
                             .padding(.vertical, 3)
-                            .background(RoundedRectangle(cornerRadius: 5).fill(Color.white.opacity(0.08)))
+                            .background(RoundedRectangle(cornerRadius: 5).fill(Theme.fill(0.08)))
                     }
                     Spacer(minLength: 0)
                 }
@@ -1298,7 +1367,7 @@ struct MainView: View {
         .padding(.leading, 70)
         .padding(.trailing, 18)
         .padding(.vertical, 11)
-        .background(picked ? Theme.cyan.opacity(0.08) : (hovered ? Color.white.opacity(0.05) : .clear))
+        .background(picked ? Theme.cyan.opacity(0.08) : (hovered ? Theme.fill(0.05) : .clear))
         .overlay(alignment: .top) { Rectangle().fill(Theme.line).frame(height: 1) }
         .contentShape(Rectangle())
         .onTapGesture {
@@ -1338,7 +1407,7 @@ struct MainView: View {
             let on = store.selectedCleanupIDs.contains(item.id)
             RoundedRectangle(cornerRadius: 5, style: .continuous)
                 .fill(on ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Color.clear))
-                .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(on ? .clear : Color(red: 0.3, green: 0.36, blue: 0.52), lineWidth: 1.5))
+                .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(on ? .clear : Theme.ink3, lineWidth: 1.5))
                 .overlay {
                     Image(systemName: "checkmark")
                         .font(.system(size: 10, weight: .heavy))
@@ -1401,14 +1470,18 @@ struct MainView: View {
                 store.hoveredID = nil
                 store.showTrashConfirmation = true
             }
-            .buttonStyle(CTAButtonStyle())
+            .buttonStyle(ToolbarButtonStyle(prominent: true, large: true))
             .disabled(empty || store.isCleaning)
-            .opacity(empty || store.isCleaning ? 0.4 : 1)
+            .opacity(empty || store.isCleaning ? 0.45 : 1)
         }
-        .buttonStyle(GhostButtonStyle())
+        .buttonStyle(ToolbarButtonStyle())
         .disabled(store.isCleaning)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .glass(radius: 22)
         .padding(.horizontal, 26)
-        .padding(.vertical, 12)
+        .padding(.top, 12)
+        .padding(.bottom, 14)
     }
 
     private func cleanupReportBanner(_ report: CleanupReport) -> some View {
@@ -1488,7 +1561,7 @@ struct MainView: View {
                 .aspectRatio(contentMode: .fill)
                 .frame(width: size, height: size)
                 .clipShape(RoundedRectangle(cornerRadius: size * 0.225, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: size * 0.225, style: .continuous).strokeBorder(Color.white.opacity(0.15)))
+                .overlay(RoundedRectangle(cornerRadius: size * 0.225, style: .continuous).strokeBorder(Theme.fill(0.15)))
         } else {
             Image(systemName: "externaldrive.fill.badge.checkmark")
                 .resizable()
@@ -1591,7 +1664,7 @@ struct MainView: View {
         .fixedSize(horizontal: false, vertical: true)
         .foregroundStyle(Theme.ink)
         .background(Backdrop())
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(store.appearance.colorScheme)
     }
 }
 

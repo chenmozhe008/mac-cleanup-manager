@@ -20,6 +20,12 @@ struct MacSpaceKeeperApp: App {
             CommandGroup(replacing: .appInfo) {
                 Button("关于 Mac 清理管家") { store.showAbout = true }
             }
+            CommandMenu("外观") {
+                Picker("外观", selection: $store.appearance) {
+                    ForEach(AppearanceMode.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.inline)
+            }
             CommandMenu("扫描") {
                 Button("选择文件夹…") { store.chooseFolder() }
                     .keyboardShortcut("o", modifiers: .command)

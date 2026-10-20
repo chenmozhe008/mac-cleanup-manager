@@ -112,10 +112,10 @@ struct AboutView: View {
             .frame(width: 880, height: 724)
             .background(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(LinearGradient(colors: [Color(red: 0.11, green: 0.17, blue: 0.39), Color(red: 0.08, green: 0.11, blue: 0.24), Color(red: 0.14, green: 0.1, blue: 0.32)],
-                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .fill(Theme.base)
+                    .overlay(Backdrop().clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous)))
             )
-            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.white.opacity(0.1)))
+            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Theme.fill(0.1)))
             .shadow(color: .black.opacity(0.6), radius: 40, y: 20)
             .overlay(alignment: .topTrailing) {
                 Button { store.showAbout = false } label: {
@@ -123,7 +123,7 @@ struct AboutView: View {
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(Theme.ink2)
                         .frame(width: 30, height: 30)
-                        .background(Circle().fill(Color.white.opacity(0.08)))
+                        .background(Circle().fill(Theme.fill(0.08)))
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut(.cancelAction)
@@ -147,7 +147,7 @@ struct AboutView: View {
                     Text("Mac 清理管家").font(.system(size: 21, weight: .bold))
                     Text("v\(AppInfo.version)")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color(red: 0.81, green: 0.88, blue: 1.0))
+                        .foregroundStyle(Theme.softInk)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 3)
                         .background(Capsule().fill(Theme.blue.opacity(0.22)))
@@ -181,7 +181,7 @@ struct AboutView: View {
             }
         }
         .padding(4)
-        .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.white.opacity(0.06)))
+        .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Theme.fill(0.06)))
     }
 
     // MARK: Intro
@@ -253,11 +253,11 @@ struct AboutView: View {
                     ForEach(Array(row.cells.enumerated()), id: \.offset) { index, cell in
                         Text(cell)
                             .font(.system(size: 12.5, weight: index == last ? .medium : .regular))
-                            .foregroundStyle(index == last ? Color.white : (cell == "—" ? Theme.ink3 : Theme.ink2))
+                            .foregroundStyle(index == last ? Theme.ink : (cell == "—" ? Theme.ink3 : Theme.ink2))
                             .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 8)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                             .background(index == last ? Theme.cyan.opacity(0.08) : .clear)
                     }
                 }
@@ -279,10 +279,10 @@ struct AboutView: View {
                     VStack(alignment: .trailing, spacing: 6) {
                         Text("v\(parts.first ?? release.id)")
                             .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(current ? Color.white : Theme.ink)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 3)
-                            .background(Capsule().fill(current ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Color.white.opacity(0.08))))
+                            .background(Capsule().fill(current ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Theme.fill(0.08))))
                             .shadow(color: current ? Theme.cyan.opacity(0.5) : .clear, radius: 8)
                         if parts.count > 1 {
                             Text(parts[1]).font(.system(size: 11.5)).foregroundStyle(Theme.ink3)
@@ -291,7 +291,7 @@ struct AboutView: View {
                     .frame(width: 100, alignment: .trailing)
                     ZStack(alignment: .top) {
                         if index < AppInfo.releases.count - 1 {
-                            Rectangle().fill(Color.white.opacity(0.1)).frame(width: 2).padding(.top, 10)
+                            Rectangle().fill(Theme.fill(0.1)).frame(width: 2).padding(.top, 10)
                         }
                         Circle()
                             .fill(current ? Theme.cyan : Theme.slate)
