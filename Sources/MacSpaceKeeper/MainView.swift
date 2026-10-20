@@ -82,7 +82,7 @@ struct MainView: View {
             .padding(.top, 40)
             HStack(spacing: 8) {
                 Text("或").foregroundStyle(Theme.ink2)
-                Button("完整扫描我的文件") { store.scanLocation(home) }
+                Button("完整扫描") { store.scanLocation(home) }
                 ForEach(store.savedFolders, id: \.self) { folder in
                     Text("·").foregroundStyle(Theme.ink3)
                     Button(folder.lastPathComponent) { store.scanLocation(folder) }
@@ -174,10 +174,10 @@ struct MainView: View {
                 .background(Circle().fill(Theme.panel))
                 .overlay(Circle().strokeBorder(Theme.line))
                 .shadow(color: Theme.blue.opacity(0.4), radius: 24)
-            Text("还没扫描过「\(store.scopeTitle)」")
+            Text(store.notScannedTitle)
                 .font(.system(size: 24, weight: .bold))
                 .padding(.top, 24)
-            Text(quick ? "只看常见缓存位置，几秒就好。" : shortPath(store.root) + " · 完整扫描可能要几分钟，只读不改。")
+            Text(quick ? "只看常见缓存位置，几秒就好。" : shortPath(store.root) + " · 可能要几分钟，只读不改。")
                 .font(.system(size: 13.5))
                 .foregroundStyle(Theme.ink2)
                 .padding(.top, 8)
@@ -220,7 +220,7 @@ struct MainView: View {
                     }
                 }
                 .frame(width: 290, height: 290)
-                Text("正在扫描\(store.scopeTitle)")
+                Text(store.scanningTitle)
                     .font(.system(size: 22, weight: .semibold))
                     .padding(.top, 24)
                 Text(store.progress.currentFolder.replacingOccurrences(of: home.path, with: "~"))
@@ -306,7 +306,7 @@ struct MainView: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             HStack(spacing: 10) {
-                liveTotal("可放心清理", ByteFormat.string(ScanStore.sum(caches)), Theme.cyan)
+                liveTotal("可清理缓存", ByteFormat.string(ScanStore.sum(caches)), Theme.cyan)
                 liveTotal("剪辑软件", ByteFormat.string(ScanStore.sum(creative)), Theme.pink)
                 liveTotal("大文件与工程", "\(large.count) 项", Theme.violet)
             }
@@ -360,8 +360,8 @@ struct MainView: View {
             .padding(.bottom, 8)
 
             sectionHeader("扫描位置")
-            locationRow("常见缓存", icon: "bolt.fill", url: home, quick: true)
-            locationRow("我的文件", icon: "house.fill", url: home, quick: false)
+            locationRow("快速扫描", icon: "bolt.fill", url: home, quick: true)
+            locationRow("完整扫描", icon: "house.fill", url: home, quick: false)
             ForEach(otherVolumes, id: \.self) { volume in
                 locationRow(volume.lastPathComponent, icon: "externaldrive.fill", url: volume, quick: false)
             }
@@ -580,7 +580,7 @@ struct MainView: View {
 
     private func topBar(_ result: ScanResult) -> some View {
         HStack(spacing: 10) {
-            Text(store.filter == .creative || store.filter == .chat ? store.filter.rawValue : (result.isQuickScan ? "常见缓存" : store.scopeTitle))
+            Text(store.filter == .creative || store.filter == .chat ? store.filter.rawValue : store.scopeTitle)
                 .font(.system(size: 15, weight: .semibold))
             Text(scanMeta(result))
                 .font(.system(size: 12.5))
@@ -743,7 +743,7 @@ struct MainView: View {
     private var cleanableSummaryCard: some View {
         let (number, unit) = splitBytes(ScanStore.sum(store.eligibleItems))
         return VStack(alignment: .leading, spacing: 6) {
-            Label("这次能在这里清", systemImage: "sparkles")
+            Label("可释放空间", systemImage: "sparkles")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Color(red: 0.81, green: 0.88, blue: 1.0))
             HStack(alignment: .firstTextBaseline, spacing: 5) {
@@ -1599,7 +1599,13 @@ struct MainView: View {
 struct WindowDragEnabler: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
-        DispatchQueue.main.async { view.window?.isMovableByWindowBackground = true }
+        DispatchQueue.main.async {
+            guard let window = view.window else { return }
+            window.isMovableByWindowBackground = true
+            // Transparent window so the behind-window blur in Backdrop shows the desktop.
+            window.isOpaque = false
+            window.backgroundColor = .clear
+        }
         return view
     }
 

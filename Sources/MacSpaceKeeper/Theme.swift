@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Dark "immersive brand" palette (mockup B, 2026-10-20).
@@ -37,21 +38,48 @@ enum Theme {
 struct Backdrop: View {
     var body: some View {
         ZStack {
-            Theme.base
-            RadialGradient(colors: [Color(red: 0.11, green: 0.23, blue: 0.54), .clear],
+            // The desktop shows through faintly behind the brand gradient (macOS 26 Liquid Glass look).
+            WindowBlur()
+            Theme.base.opacity(0.78)
+            RadialGradient(colors: [Color(red: 0.11, green: 0.23, blue: 0.54).opacity(0.85), .clear],
                            center: UnitPoint(x: 0.3, y: 0), startRadius: 0, endRadius: 760)
-            RadialGradient(colors: [Color(red: 0.23, green: 0.11, blue: 0.54).opacity(0.9), .clear],
+            RadialGradient(colors: [Color(red: 0.23, green: 0.11, blue: 0.54).opacity(0.75), .clear],
                            center: .bottomTrailing, startRadius: 0, endRadius: 620)
         }
         .ignoresSafeArea()
     }
 }
 
+/// Behind-window blur so the window itself reads as glass.
+struct WindowBlur: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .hudWindow
+        view.blendingMode = .behindWindow
+        view.state = .active
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
+}
+
 extension View {
     /// Frosted panel; `highlighted` gives the blue glow used for the active card.
+    @ViewBuilder
     func glass(radius: CGFloat = 14, highlighted: Bool = false) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        return self
+        if #available(macOS 26.0, *) {
+            // Liquid Glass on macOS 26+; the active card gets a blue tint.
+            self
+                .glassEffect(highlighted ? .regular.tint(Theme.blue.opacity(0.35)) : .regular, in: shape)
+                .shadow(color: highlighted ? Theme.blue.opacity(0.4) : .clear, radius: 18, y: 10)
+        } else {
+            legacyGlass(shape: shape, highlighted: highlighted)
+        }
+    }
+
+    private func legacyGlass(shape: RoundedRectangle, highlighted: Bool) -> some View {
+        self
             .background(
                 shape.fill(highlighted
                            ? AnyShapeStyle(LinearGradient(colors: [Theme.blue.opacity(0.35), Theme.cyan.opacity(0.12)],

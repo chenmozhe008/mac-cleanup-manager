@@ -44,6 +44,9 @@ enum AppInfo {
         return releases
     }
 
+    /// Matches LSMinimumSystemVersion and the arm64-only build.
+    static let requirements = "macOS 14 Sonoma 及以上 · Apple 芯片（M1 及更新）· macOS 26 起显示液态玻璃效果"
+
     static func sendFeedback() {
         let subject = "Mac 清理管家反馈 v\(version)"
         let body = "\n\n—— 请描述遇到的问题，最好附截图 ——\n\(diagnostics)"
@@ -153,6 +156,9 @@ struct AboutView: View {
                 Text("作者 \(AppInfo.author) · 给做视频、做内容的人用的 Mac 清理工具")
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.ink2)
+                Label("系统要求：\(AppInfo.requirements)", systemImage: "desktopcomputer")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.ink3)
             }
         }
     }

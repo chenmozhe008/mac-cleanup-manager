@@ -58,12 +58,25 @@ final class ScanStore: ObservableObject {
     }
 
     var scopeTitle: String {
-        if quickMode { return "常见缓存" }
-        if root.path == policy.home.path { return "我的文件" }
+        if quickMode { return "快速扫描" }
+        if root.path == policy.home.path { return "完整扫描" }
         return root.lastPathComponent
     }
 
     var isQuickScope: Bool { quickMode }
+
+    /// "正在快速扫描" / "正在完整扫描" / "正在扫描「Coding」"
+    var scanningTitle: String {
+        if quickMode { return "正在快速扫描" }
+        if root.path == policy.home.path { return "正在完整扫描" }
+        return "正在扫描「\(root.lastPathComponent)」"
+    }
+
+    var notScannedTitle: String {
+        if quickMode { return "还没做过快速扫描" }
+        if root.path == policy.home.path { return "还没做过完整扫描" }
+        return "还没扫描过「\(root.lastPathComponent)」"
+    }
 
     var selectedItem: ScanItem? { displayedItems.first { $0.id == selectedID } }
 
@@ -423,10 +436,10 @@ final class ScanStore: ObservableObject {
 }
 
 enum ItemFilter: String, CaseIterable, Identifiable {
-    case caches = "可放心清理"
+    case caches = "可清理缓存"
     case creative = "剪辑与设计软件"
     case chat = "微信与企业微信"
-    case review = "需要你判断"
+    case review = "谨慎处理"
     case large = "大文件与工程"
     var id: String { rawValue }
 
