@@ -6,7 +6,7 @@ struct DiskScanner: Sendable {
     let largeFileThreshold: Int64
     /// Projects and app data below this are noise in "大文件与工程" (config dirs, tiny .xcodeproj).
     let minProjectBytes: Int64 = 200_000_000
-    /// "谨慎处理" items below this are not worth a decision.
+    /// "需要判断" items below this are not worth a decision.
     let minReviewBytes: Int64 = 50_000_000
     /// Called for every item as it is found, so the scanning screen can show live discoveries.
     var onFound: (@Sendable (ScanItem) -> Void)?

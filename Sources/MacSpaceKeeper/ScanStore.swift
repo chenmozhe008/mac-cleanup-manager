@@ -439,7 +439,7 @@ enum ItemFilter: String, CaseIterable, Identifiable {
     case caches = "可清理缓存"
     case creative = "剪辑与设计软件"
     case chat = "微信与企业微信"
-    case review = "谨慎处理"
+    case review = "需要判断"
     case large = "大文件与工程"
     var id: String { rawValue }
 
