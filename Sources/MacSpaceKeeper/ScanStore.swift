@@ -35,6 +35,8 @@ final class ScanStore: ObservableObject {
         static let savedFolders = "savedFolders"
         static let scanSizes = "scanSizes"
         static let lastFilter = "lastFilter"
+        static let lastScope = "lastScope"
+        static let scanDates = "scanDates"
     }
 
     init() {
@@ -54,7 +56,7 @@ final class ScanStore: ObservableObject {
     }
 
     var scopeTitle: String {
-        if result?.isQuickScan == true || (isScanning && quickMode) { return "常见缓存" }
+        if quickMode { return "常见缓存" }
         if root.path == policy.home.path { return "我的文件" }
         return root.lastPathComponent
     }
@@ -155,10 +157,10 @@ final class ScanStore: ObservableObject {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.prompt = "添加并扫描"
+        panel.prompt = "添加"
         if panel.runModal() == .OK, let url = panel.url {
             addSavedFolder(url)
-            scanLocation(url)
+            selectLocation(url, quick: false)
         }
     }
 
@@ -193,6 +195,24 @@ final class ScanStore: ObservableObject {
         progress = ScanProgress(scannedCount: 0, currentFolder: "")
     }
 
+    /// Switch to a location and show its last result. Scanning only starts from the scan button.
+    func selectLocation(_ url: URL, quick: Bool) {
+        guard !isScanning, !isCleaning else { return }
+        setRoot(quick ? policy.home : url)
+        quickMode = quick
+        showSavedResult()
+    }
+
+    func isCurrentScope(_ url: URL, quick: Bool) -> Bool {
+        quick ? quickMode : (!quickMode && root.path == url.standardizedFileURL.path)
+    }
+
+    func lastScanDate(_ url: URL, quick: Bool) -> Date? {
+        scanDates[Self.scopeKey(root: url.standardizedFileURL, quick: quick)].map(Date.init(timeIntervalSince1970:))
+    }
+
+    var hasHistory: Bool { !scanDates.isEmpty }
+
     func scanLocation(_ url: URL) {
         setRoot(url)
         quickMode = false
@@ -226,7 +246,14 @@ final class ScanStore: ObservableObject {
 
     // MARK: Scanning
 
-    private var scopeKey: String { quickMode ? "quick" : root.path }
+    private var scopeKey: String { Self.scopeKey(root: root, quick: quickMode) }
+
+    private static func scopeKey(root: URL, quick: Bool) -> String { quick ? "quick" : root.path }
+
+    private var scanDates: [String: Double] {
+        get { UserDefaults.standard.dictionary(forKey: Keys.scanDates) as? [String: Double] ?? [:] }
+        set { UserDefaults.standard.set(newValue, forKey: Keys.scanDates) }
+    }
 
     private var scanSizes: [String: Int] {
         get { UserDefaults.standard.dictionary(forKey: Keys.scanSizes) as? [String: Int] ?? [:] }
@@ -283,7 +310,7 @@ final class ScanStore: ObservableObject {
                     self.filter = ItemFilter.allCases.first { category in value.items.contains { category.contains($0) } } ?? .caches
                     self.selectedID = nil
                     self.scanSizes[self.scopeKey] = value.scannedCount
-                    self.saveLastResult(value)
+                    self.saveResult(value)
                 case .failure(let error):
                     self.message = error is CancellationError ? "扫描已取消。" : error.localizedDescription
                 }
@@ -298,36 +325,60 @@ final class ScanStore: ObservableObject {
         scanID = UUID()
         isScanning = false
         message = "扫描已取消。"
-        // Return to the previous result instead of an empty screen.
-        loadLastResult()
+        // Return to this location's previous result instead of an empty screen.
+        showSavedResult()
     }
 
-    // MARK: Last result
+    // MARK: Saved results (one per location)
 
-    private var lastResultURL: URL {
+    private var resultsDirectory: URL {
         let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appending(path: "MacSpaceKeeper")
+            .appending(path: "MacSpaceKeeper/results")
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return directory.appending(path: "last-scan.json")
+        return directory
     }
 
-    private func saveLastResult(_ value: ScanResult) {
-        if let data = try? JSONEncoder().encode(value) { try? data.write(to: lastResultURL, options: .atomic) }
+    private func resultURL(for key: String) -> URL {
+        let name = Data(key.utf8).base64EncodedString().replacingOccurrences(of: "/", with: "_")
+        return resultsDirectory.appending(path: "\(name).json")
     }
 
-    /// Shows the previous scan on launch. Cleanup still re-checks each path's identity before moving.
-    private func loadLastResult() {
-        guard let data = try? Data(contentsOf: lastResultURL),
-              let value = try? JSONDecoder().decode(ScanResult.self, from: data) else { return }
+    private func saveResult(_ value: ScanResult) {
+        if let data = try? JSONEncoder().encode(value) { try? data.write(to: resultURL(for: scopeKey), options: .atomic) }
+        scanDates[scopeKey] = value.scannedAt.timeIntervalSince1970
+        UserDefaults.standard.set(scopeKey, forKey: Keys.lastScope)
+    }
+
+    /// Shows the current location's previous scan. Cleanup still re-checks each path's identity before moving.
+    private func showSavedResult() {
+        UserDefaults.standard.set(scopeKey, forKey: Keys.lastScope)
+        guard let data = try? Data(contentsOf: resultURL(for: scopeKey)),
+              let value = try? JSONDecoder().decode(ScanResult.self, from: data) else {
+            result = nil
+            return
+        }
         result = value
-        root = value.root
-        quickMode = value.isQuickScan
         // Reopen on the category last viewed.
         if let saved = UserDefaults.standard.string(forKey: Keys.lastFilter).flatMap(ItemFilter.init(rawValue:)) {
             filter = saved
         } else {
             filter = ItemFilter.allCases.first { category in value.items.contains { category.contains($0) } } ?? .caches
         }
+    }
+
+    /// On launch: reopen the location viewed last (migrating the old single last-scan file once).
+    private func loadLastResult() {
+        let legacy = resultsDirectory.deletingLastPathComponent().appending(path: "last-scan.json")
+        if let data = try? Data(contentsOf: legacy), let value = try? JSONDecoder().decode(ScanResult.self, from: data) {
+            root = value.root
+            quickMode = value.isQuickScan
+            saveResult(value)
+            try? FileManager.default.removeItem(at: legacy)
+        }
+        guard let key = UserDefaults.standard.string(forKey: Keys.lastScope) else { return }
+        quickMode = key == "quick"
+        root = quickMode ? policy.home : URL(fileURLWithPath: key)
+        showSavedResult()
     }
 
     // MARK: Cleanup

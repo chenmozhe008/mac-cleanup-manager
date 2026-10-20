@@ -10,11 +10,12 @@ struct MainView: View {
     @ObservedObject var store: ScanStore
 
     var hasResult: Bool { store.result != nil && !store.isScanning }
+    var showSidebar: Bool { !store.isScanning && (store.result != nil || store.hasHistory) }
     var home: URL { FileManager.default.homeDirectoryForCurrentUser }
 
     var body: some View {
         HStack(spacing: 0) {
-            if hasResult {
+            if showSidebar {
                 sidebar.frame(width: 232)
                 Rectangle().fill(Theme.line).frame(width: 1)
             }
@@ -23,6 +24,8 @@ struct MainView: View {
                     scanningView
                 } else if let result = store.result {
                     resultView(result)
+                } else if store.hasHistory {
+                    readyView
                 } else {
                     welcomeView
                 }
@@ -136,6 +139,43 @@ struct MainView: View {
             .padding(.vertical, 16)
             .frame(maxWidth: 440)
             .glass(radius: 16)
+        }
+    }
+
+    // MARK: Ready (location selected, not scanned yet)
+
+    private var readyView: some View {
+        let quick = store.isQuickScope
+        return VStack(spacing: 0) {
+            HStack {
+                Text(store.scopeTitle).font(.system(size: 15, weight: .semibold))
+                Text("未扫描").font(.system(size: 12.5)).foregroundStyle(Theme.ink3)
+                Spacer()
+            }
+            .padding(.horizontal, 22)
+            .frame(height: 52)
+            .overlay(alignment: .bottom) { Rectangle().fill(Theme.line).frame(height: 1) }
+            Spacer()
+            Image(systemName: quick ? "bolt.fill" : "folder.fill")
+                .font(.system(size: 40, weight: .medium))
+                .foregroundStyle(Theme.accent)
+                .frame(width: 104, height: 104)
+                .background(Circle().fill(Theme.panel))
+                .overlay(Circle().strokeBorder(Theme.line))
+                .shadow(color: Theme.blue.opacity(0.4), radius: 24)
+            Text("还没扫描过「\(store.scopeTitle)」")
+                .font(.system(size: 24, weight: .bold))
+                .padding(.top, 24)
+            Text(quick ? "只看常见缓存位置，几秒就好。" : shortPath(store.root) + " · 完整扫描可能要几分钟，只读不改。")
+                .font(.system(size: 13.5))
+                .foregroundStyle(Theme.ink2)
+                .padding(.top, 8)
+            Button { store.scan() } label: { Label("开始扫描", systemImage: "play.fill") }
+                .buttonStyle(CTAButtonStyle())
+                .keyboardShortcut(.defaultAction)
+                .padding(.top, 26)
+            Spacer()
+            Spacer()
         }
     }
 
@@ -309,22 +349,24 @@ struct MainView: View {
             .padding(.bottom, 8)
 
             sectionHeader("扫描位置")
-            locationRow("常见缓存", icon: "bolt.fill", detail: "几秒", active: store.result?.isQuickScan == true) { store.scanKnownCaches() }
-            locationRow("我的文件", icon: "house.fill", detail: "几分钟", active: isActiveFull(home)) { store.scanLocation(home) }
+            locationRow("常见缓存", icon: "bolt.fill", url: home, quick: true)
+            locationRow("我的文件", icon: "house.fill", url: home, quick: false)
             ForEach(otherVolumes, id: \.self) { volume in
-                locationRow(volume.lastPathComponent, icon: "externaldrive.fill", detail: "外接", active: isActiveFull(volume)) { store.scanLocation(volume) }
+                locationRow(volume.lastPathComponent, icon: "externaldrive.fill", url: volume, quick: false)
             }
             ForEach(store.savedFolders, id: \.self) { folder in
-                locationRow(folder.lastPathComponent, icon: "folder.fill", detail: nil, active: isActiveFull(folder)) { store.scanLocation(folder) }
+                locationRow(folder.lastPathComponent, icon: "folder.fill", url: folder, quick: false)
                     .contextMenu {
                         Button("在 Finder 中显示") { NSWorkspace.shared.activateFileViewerSelecting([folder]) }
                         Button("从列表移除") { store.removeSavedFolder(folder) }
                     }
             }
-            locationRow("添加文件夹", icon: "plus", detail: nil, active: false, dim: true) { store.chooseFolder() }
+            addFolderRow
 
-            sectionHeader("分类").padding(.top, 12)
-            ForEach(ItemFilter.allCases) { category in
+            if store.result != nil {
+                sectionHeader("分类").padding(.top, 12)
+            }
+            ForEach(store.result == nil ? [] : ItemFilter.allCases) { category in
                 let items = store.items(in: category)
                 switch category {
                 case .chat:
@@ -350,10 +392,6 @@ struct MainView: View {
         .background(Color.white.opacity(0.03))
     }
 
-    private func isActiveFull(_ url: URL) -> Bool {
-        store.result?.isQuickScan == false && store.root.path == url.standardizedFileURL.path
-    }
-
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
             .font(.system(size: 12, weight: .semibold))
@@ -363,8 +401,10 @@ struct MainView: View {
             .padding(.bottom, 4)
     }
 
-    private func locationRow(_ title: String, icon: String, detail: String?, active: Bool, dim: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    /// Clicking only switches to the location and shows its last result; scanning starts from the scan button.
+    private func locationRow(_ title: String, icon: String, url: URL, quick: Bool) -> some View {
+        let active = store.isCurrentScope(url, quick: quick)
+        return Button { withAnimation(.easeOut(duration: 0.15)) { store.selectLocation(url, quick: quick) } } label: {
             HStack(spacing: 10) {
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .medium))
@@ -372,19 +412,48 @@ struct MainView: View {
                     .foregroundStyle(active ? Theme.cyan : Theme.ink2)
                 Text(title).lineLimit(1).truncationMode(.middle)
                 Spacer(minLength: 4)
-                if let detail {
-                    Text(detail).font(.system(size: 11.5)).foregroundStyle(Theme.ink3)
+                TimelineView(.everyMinute) { _ in
+                    Text(store.lastScanDate(url, quick: quick).map(Self.ago) ?? "未扫描")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.ink3)
                 }
             }
             .font(.system(size: 13.5))
-            .foregroundStyle(active ? Theme.ink : (dim ? Theme.ink3 : Theme.ink2))
+            .foregroundStyle(active ? Theme.ink : Theme.ink2)
             .padding(.horizontal, 8)
             .padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 8).fill(active ? Color.white.opacity(0.07) : .clear))
+            .background(RoundedRectangle(cornerRadius: 8).fill(active ? Color.white.opacity(0.08) : .clear))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(store.isCleaning)
+    }
+
+    private var addFolderRow: some View {
+        Button { store.chooseFolder() } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "plus").font(.system(size: 13, weight: .medium)).frame(width: 18)
+                Text("添加文件夹")
+                Spacer(minLength: 4)
+            }
+            .font(.system(size: 13.5))
+            .foregroundStyle(Theme.ink3)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(store.isCleaning)
+    }
+
+    /// "刚刚 / 3 分钟前 / 2 小时前 / 昨天 / 10月18日"
+    static func ago(_ date: Date) -> String {
+        let seconds = Date().timeIntervalSince(date)
+        if seconds < 60 { return "刚刚" }
+        if seconds < 3600 { return "\(Int(seconds / 60)) 分钟前" }
+        if Calendar.current.isDateInToday(date) { return "\(Int(seconds / 3600)) 小时前" }
+        if Calendar.current.isDateInYesterday(date) { return "昨天" }
+        return date.formatted(.dateTime.month().day())
     }
 
     private func categoryRow(_ category: ItemFilter, bytes: Int64) -> some View {
@@ -484,15 +553,9 @@ struct MainView: View {
                 .foregroundStyle(Theme.ink3)
                 .lineLimit(1)
             Spacer()
-            Button {
-                result.isQuickScan ? store.scanLocation(home) : store.scanKnownCaches()
-            } label: {
-                Label(result.isQuickScan ? "完整扫描" : "快速扫描", systemImage: result.isQuickScan ? "magnifyingglass" : "bolt.fill")
-            }
-            .buttonStyle(ToolbarButtonStyle())
-            .help(result.isQuickScan ? "扫描整个「我的文件」，能找出大文件和剪辑软件缓存（几分钟）" : "只看常见缓存（几秒）")
             Button { store.scan() } label: { Label("重新扫描", systemImage: "arrow.clockwise") }
                 .buttonStyle(ToolbarButtonStyle(prominent: true))
+                .help("重新扫描「\(store.scopeTitle)」")
                 .help("按当前范围重新扫描（⌘R）")
         }
         .disabled(store.isCleaning)
@@ -502,9 +565,8 @@ struct MainView: View {
     }
 
     private func scanMeta(_ result: ScanResult) -> String {
-        let day = Calendar.current.isDateInToday(result.scannedAt) ? "今天" : result.scannedAt.formatted(.dateTime.month().day())
         let count = result.scannedCount >= 10_000 ? "\(result.scannedCount / 10_000) 万项" : "\(result.scannedCount) 项"
-        return "\(day) \(result.scannedAt.formatted(date: .omitted, time: .shortened)) · 已检查 \(count)"
+        return "上次扫描 \(Self.ago(result.scannedAt)) · 已检查 \(count)"
     }
 
     private func ring(_ result: ScanResult) -> some View {
