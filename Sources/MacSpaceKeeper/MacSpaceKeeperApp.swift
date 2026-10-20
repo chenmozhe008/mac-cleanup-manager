@@ -11,9 +11,10 @@ struct MacSpaceKeeperApp: App {
     var body: some Scene {
         WindowGroup("Mac 清理管家") {
             MainView(store: store)
-                .frame(minWidth: 900, minHeight: 600)
+                .frame(minWidth: 960, minHeight: 640)
         }
-        .defaultSize(width: 1120, height: 760)
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 1200, height: 780)
         .commands {
             CommandGroup(replacing: .newItem) { }
             CommandMenu("扫描") {

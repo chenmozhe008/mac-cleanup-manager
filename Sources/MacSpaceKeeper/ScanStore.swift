@@ -16,7 +16,6 @@ final class ScanStore: ObservableObject {
     @Published var isCleaning = false
     @Published var cleanedCount = 0
     @Published var filter: ItemFilter = .caches
-    @Published var showInspector = true
 
     let policy = SafetyPolicy()
     private var scanID = UUID()
@@ -76,11 +75,12 @@ final class ScanStore: ObservableObject {
         selectedCleanupIDs.removeAll()
     }
 
-    func selectFirstVisibleItem() {
-        if !displayedItems.contains(where: { $0.id == selectedID }) {
-            selectedID = displayedItems.first?.id
-        }
+    func selectCategory(_ category: ItemFilter) {
+        filter = category
+        selectedID = nil
     }
+
+    var isQuickScope: Bool { quickMode }
 
     func chooseFolder() {
         guard !isCleaning else { return }
@@ -157,7 +157,7 @@ final class ScanStore: ObservableObject {
                     self.result = value
                     self.selectedCleanupIDs.removeAll()
                     self.filter = ItemFilter.allCases.first { category in value.items.contains { category.contains($0.kind) } } ?? .caches
-                    self.selectedID = value.items.first { self.filter.contains($0.kind) }?.id
+                    self.selectedID = nil
                 case .failure(let error):
                     self.message = error is CancellationError ? "扫描已取消。" : error.localizedDescription
                 }
