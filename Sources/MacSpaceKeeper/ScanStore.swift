@@ -16,6 +16,7 @@ final class ScanStore: ObservableObject {
     @Published var isCleaning = false
     @Published var cleanedCount = 0
     @Published var filter: ItemFilter = .caches
+    @Published var showInspector = true
 
     let policy = SafetyPolicy()
     private var scanID = UUID()
@@ -25,11 +26,17 @@ final class ScanStore: ObservableObject {
 
     var displayedItems: [ScanItem] {
         guard let result else { return [] }
-        switch filter {
-        case .all: return result.items
-        case .caches: return result.items.filter { $0.kind == .cache }
-        case .projects: return result.items.filter { $0.kind == .project || $0.kind == .largeFile || $0.kind == .review || $0.kind == .folder }
-        }
+        return result.items.filter { filter.contains($0.kind) }
+    }
+
+    func items(in category: ItemFilter) -> [ScanItem] {
+        result?.items.filter { category.contains($0.kind) } ?? []
+    }
+
+    var scopeTitle: String {
+        if result?.isQuickScan == true || (isScanning && quickMode) { return "常见缓存" }
+        if root.path == policy.home.path { return "我的文件" }
+        return root.lastPathComponent
     }
 
     var selectedItem: ScanItem? { displayedItems.first { $0.id == selectedID } }
@@ -149,9 +156,8 @@ final class ScanStore: ObservableObject {
                 case .success(let value):
                     self.result = value
                     self.selectedCleanupIDs.removeAll()
-                    let caches = value.items.filter { $0.kind == .cache }
-                    self.filter = caches.isEmpty ? .all : .caches
-                    self.selectedID = (caches.first ?? value.items.first)?.id
+                    self.filter = ItemFilter.allCases.first { category in value.items.contains { category.contains($0.kind) } } ?? .caches
+                    self.selectedID = value.items.first { self.filter.contains($0.kind) }?.id
                 case .failure(let error):
                     self.message = error is CancellationError ? "扫描已取消。" : error.localizedDescription
                 }
@@ -211,8 +217,27 @@ final class ScanStore: ObservableObject {
 }
 
 enum ItemFilter: String, CaseIterable, Identifiable {
-    case all = "全部"
-    case caches = "可清理缓存"
-    case projects = "工程与人工审阅"
+    case caches = "可放心清理"
+    case review = "需要你判断"
+    case large = "大文件与工程"
+    case folders = "目录占用"
     var id: String { rawValue }
+
+    var symbol: String {
+        switch self {
+        case .caches: "sparkles"
+        case .review: "hand.raised"
+        case .large: "shippingbox"
+        case .folders: "folder"
+        }
+    }
+
+    func contains(_ kind: ScanKind) -> Bool {
+        switch self {
+        case .caches: kind == .cache
+        case .review: kind == .review
+        case .large: kind == .project || kind == .largeFile
+        case .folders: kind == .folder
+        }
+    }
 }

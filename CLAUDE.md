@@ -9,6 +9,12 @@
 - `dist/` 里只保留这一个 App；旧名字的包（如 `MacSpaceKeeper.app`）会被误开成旧版，发现就清掉
 - `swift test` 在只有命令行工具（无 Xcode）的环境下会报 TestingMacros 插件缺失，属于环境问题
 
+## 界面结构（2026-10-20 定）
+
+原生三栏：左栏分类（`ItemFilter`）+ 磁盘余量，中间 `Table`，右侧 `.inspector` 详情，底部操作条。扫描范围菜单和重新扫描放在工具栏右侧；扫描统计放窗口副标题和左栏底部。不要再回到整页滚动、堆卡片和常驻说明文字的写法。
+
+- 本机只有命令行工具，**`@State` 等 SwiftUI 宏编译不过**（缺 SwiftUIMacros 插件）。视图状态一律放进 `ScanStore` 的 `@Published`
+
 ## 图标
 
 - `Resources/AppIcon-source.png` 必须是**满版不透明正方形**（1024，无透明圆角）。macOS 26+ 会自动套圆角；带透明边的老式图标会被塞进灰色方框

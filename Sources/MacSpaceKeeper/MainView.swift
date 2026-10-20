@@ -9,88 +9,376 @@ private enum BrandAsset {
 struct MainView: View {
     @ObservedObject var store: ScanStore
 
+    private var hasResult: Bool { store.result != nil && !store.isScanning }
+
     var body: some View {
         NavigationSplitView {
-            List {
-                Section("扫描位置") {
-                    locationButton("我的文件", icon: "house", url: FileManager.default.homeDirectoryForCurrentUser)
-                    ForEach(otherVolumes, id: \.self) { volume in
-                        locationButton(volume.lastPathComponent, icon: "externaldrive", url: volume)
-                    }
-                }
-                Section {
-                    Button { store.chooseFolder() } label: {
-                        Label("选一个文件夹…", systemImage: "folder.badge.plus")
-                    }
-                }
-            }
-            .listStyle(.sidebar)
-            .navigationTitle("Mac 清理管家")
-            .safeAreaInset(edge: .bottom) {
-                HStack(spacing: 6) {
-                    Image(systemName: "lock.shield")
-                    Text("扫描只读 · 清理需确认")
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            sidebar
+                .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 280)
         } detail: {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    topBar
-                    if let message = store.message {
-                        Label(message, systemImage: "info.circle")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .padding(14)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-                    }
-                    if let report = store.cleanupReport {
-                        cleanupReportBanner(report)
-                    }
-                    if store.isScanning {
-                        scanningContent
-                    } else if let result = store.result {
-                        resultContent(result)
-                    } else {
-                        welcomeContent
-                    }
+            content
+                .navigationTitle(hasResult ? store.filter.rawValue : "Mac 清理管家")
+                .navigationSubtitle(subtitle)
+                .inspector(isPresented: Binding(get: { store.showInspector && hasResult }, set: { store.showInspector = $0 })) {
+                    inspector
+                        .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
                 }
-                .padding(28)
-                .frame(maxWidth: 1120, alignment: .leading)
-                .frame(maxWidth: .infinity)
-            }
-            .safeAreaInset(edge: .bottom) {
-                if store.result != nil && !store.isScanning { selectionBar }
-            }
-            .sheet(isPresented: $store.showTrashConfirmation) { cleanupReviewSheet }
         }
+        .toolbar { toolbarContent }
+        .sheet(isPresented: $store.showTrashConfirmation) { cleanupReviewSheet }
         .frame(minWidth: 900, minHeight: 600)
     }
 
-    private var topBar: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Mac 清理管家")
-                    .font(.title2.weight(.bold))
-                Text("看清空间占用，再决定怎么处理")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+    private var subtitle: String {
+        guard hasResult else { return "" }
+        let items = store.displayedItems
+        return "\(items.count.formatted()) 项 · \(ByteFormat.string(totalBytes(items)))"
+    }
+
+    // MARK: Toolbar
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Menu {
+                Button("快速扫描常见缓存") { store.scanKnownCaches() }
+                Button("完整扫描我的文件") { store.scanLocation(FileManager.default.homeDirectoryForCurrentUser) }
+                if !otherVolumes.isEmpty {
+                    Divider()
+                    ForEach(otherVolumes, id: \.self) { volume in
+                        Button("扫描 \(volume.lastPathComponent)") { store.scanLocation(volume) }
+                    }
+                }
+                Divider()
+                Button("选择文件夹…") { store.chooseFolder() }
+            } label: {
+                Label(store.result == nil && !store.isScanning ? "扫描位置" : store.scopeTitle, systemImage: "scope")
+                    .labelStyle(.titleAndIcon)
             }
-            Spacer()
-            brandIcon(44)
+            .disabled(store.isCleaning)
+            .help("选择扫描范围")
+        }
+        ToolbarItemGroup(placement: .primaryAction) {
+            if store.isScanning {
+                Button { store.cancelScan() } label: { Label("停止扫描", systemImage: "stop.fill") }
+                    .help("停止扫描")
+            } else {
+                Button { store.scan() } label: { Label("重新扫描", systemImage: "arrow.clockwise") }
+                    .disabled(store.result == nil || store.isCleaning)
+                    .help("重新扫描当前范围")
+            }
+            Button { store.showInspector.toggle() } label: { Label("详情", systemImage: "sidebar.right") }
+                .disabled(!hasResult)
+                .help("显示或隐藏详情")
         }
     }
 
+    // MARK: Sidebar
+
+    private var sidebar: some View {
+        List(selection: Binding<ItemFilter?>(
+            get: { hasResult ? store.filter : nil },
+            set: { if let value = $0 { store.filter = value; store.selectFirstVisibleItem() } }
+        )) {
+            Section("扫描结果") {
+                if hasResult {
+                    ForEach(ItemFilter.allCases) { category in
+                        let items = store.items(in: category)
+                        if category == .caches || !items.isEmpty {
+                            sidebarRow(category, items: items).tag(category)
+                        }
+                    }
+                } else {
+                    Text(store.isScanning ? "扫描中…" : "扫描后在这里分类")
+                        .font(.callout)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .listStyle(.sidebar)
+        .safeAreaInset(edge: .bottom) { diskGauge }
+    }
+
+    private func sidebarRow(_ category: ItemFilter, items: [ScanItem]) -> some View {
+        HStack {
+            Label(category.rawValue, systemImage: category.symbol)
+            Spacer(minLength: 6)
+            Text(ByteFormat.string(totalBytes(items)))
+                .font(.callout)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var diskGauge: some View {
+        let url = store.result?.root ?? store.root
+        if let capacity = volumeCapacity(url), capacity.total > 0 {
+            let low = capacity.free < 6 * 1_073_741_824
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "internaldrive")
+                    Text(volumeName(url))
+                        .lineLimit(1)
+                }
+                .font(.callout.weight(.medium))
+                ProgressView(value: Double(capacity.total - capacity.free), total: Double(capacity.total))
+                    .tint(low ? .orange : .accentColor)
+                Text("剩余 \(ByteFormat.string(capacity.free)) · 共 \(ByteFormat.string(capacity.total))")
+                    .font(.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(low ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                if let result = store.result, !store.isScanning {
+                    Text("已检查 \(result.scannedCount.formatted()) 项" + (result.skippedCount > 0 ? " · \(result.skippedCount.formatted()) 项无权限未计入" : ""))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(14)
+        }
+    }
+
+    // MARK: Content
+
+    @ViewBuilder
+    private var content: some View {
+        Group {
+            if store.isScanning {
+                scanningView
+            } else if store.result != nil {
+                resultTable
+            } else {
+                welcomeView
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .top, spacing: 0) { banners }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if hasResult && store.filter == .caches && !store.eligibleItems.isEmpty { selectionBar }
+        }
+    }
+
+    @ViewBuilder
+    private var banners: some View {
+        if store.cleanupReport != nil || store.message != nil {
+            VStack(spacing: 8) {
+                if let report = store.cleanupReport { cleanupReportBanner(report) }
+                if let message = store.message {
+                    Label(message, systemImage: "info.circle")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(12)
+        }
+    }
+
+    private var welcomeView: some View {
+        VStack(spacing: 18) {
+            brandIcon(96)
+            VStack(spacing: 6) {
+                Text("看看空间都去哪了")
+                    .font(.title.weight(.semibold))
+                Text("扫描只读取大小和位置；清理前会让你逐项确认。")
+                    .foregroundStyle(.secondary)
+            }
+            HStack(spacing: 10) {
+                Button("快速扫描") { store.scanKnownCaches() }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                Button("完整扫描我的文件") { store.scanLocation(FileManager.default.homeDirectoryForCurrentUser) }
+            }
+            .controlSize(.large)
+            Text("快速扫描只看常见缓存，几秒完成；完整扫描还能找出大文件和工程，需要几分钟。")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(40)
+    }
+
+    private var scanningView: some View {
+        VStack(spacing: 14) {
+            ProgressView()
+                .controlSize(.large)
+            Text("正在扫描\(store.scopeTitle)")
+                .font(.title2.weight(.semibold))
+            Text("已检查 \(store.progress.scannedCount.formatted()) 项")
+                .font(.body.monospacedDigit())
+                .foregroundStyle(.secondary)
+            Text(store.progress.currentFolder)
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: 440)
+            Button("停止扫描") { store.cancelScan() }
+                .padding(.top, 6)
+        }
+        .padding(40)
+    }
+
+    private var resultTable: some View {
+        let items = store.displayedItems
+        let maxBytes = max(items.map(\.bytes).max() ?? 1, 1)
+        return Table(items, selection: $store.selectedID) {
+            TableColumn("") { item in
+                if item.canTrash {
+                    Toggle("选择 \(item.name)", isOn: Binding(
+                        get: { store.selectedCleanupIDs.contains(item.id) },
+                        set: { store.setCleanupSelected(item, selected: $0) }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.checkbox)
+                    .disabled(store.isCleaning)
+                } else {
+                    Image(systemName: "lock")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .help("仅提示，不在这里清理")
+                }
+            }
+            .width(22)
+            TableColumn("名称") { item in
+                HStack(spacing: 8) {
+                    Image(nsImage: NSWorkspace.shared.icon(forFile: item.url.path))
+                        .resizable()
+                        .frame(width: 18, height: 18)
+                    Text(item.name)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text(item.url.deletingLastPathComponent().path.replacingOccurrences(of: store.policy.home.path, with: "~"))
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.head)
+                }
+            }
+            TableColumn("大小") { item in
+                HStack(spacing: 10) {
+                    SizeBar(fraction: Double(item.bytes) / Double(maxBytes))
+                    Text(ByteFormat.string(item.bytes))
+                        .monospacedDigit()
+                        .frame(minWidth: 64, alignment: .trailing)
+                }
+            }
+            .width(min: 140, ideal: 160, max: 200)
+        }
+        .alternatingRowBackgrounds(.disabled)
+        .overlay {
+            if items.isEmpty {
+                ContentUnavailableView(store.filter == .caches ? "没有发现可清理缓存" : "这里没有项目", systemImage: "checkmark.circle")
+            }
+        }
+    }
+
+    private var selectionBar: some View {
+        let allSelected = store.selectedCleanupIDs.count == store.eligibleItems.count
+        return VStack(spacing: 0) {
+            Divider()
+            HStack(spacing: 14) {
+                Button(allSelected ? "取消全选" : "全选") {
+                    allSelected ? store.clearCleanupSelection() : store.selectAllEligible()
+                }
+                .disabled(store.isCleaning)
+                if store.isCleaning {
+                    ProgressView().controlSize(.small)
+                    Text("正在移入废纸篓 \(store.cleanedCount)/\(store.selectedCleanupItems.count)")
+                        .monospacedDigit()
+                } else {
+                    Text("已选 \(store.selectedCleanupItems.count) 项 · \(ByteFormat.string(store.selectedCleanupBytes))")
+                        .font(.headline)
+                        .monospacedDigit()
+                }
+                Spacer()
+                Button("移入废纸篓…") { store.showTrashConfirmation = true }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(store.selectedCleanupItems.isEmpty || store.isCleaning)
+            }
+            .controlSize(.large)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
+        .background(.bar)
+    }
+
+    // MARK: Inspector
+
+    @ViewBuilder
+    private var inspector: some View {
+        if let item = store.selectedItem {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Image(nsImage: NSWorkspace.shared.icon(forFile: item.url.path))
+                        .resizable()
+                        .frame(width: 56, height: 56)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(item.name)
+                            .font(.title3.weight(.semibold))
+                            .lineLimit(3)
+                        Text(ByteFormat.string(item.bytes))
+                            .font(.system(size: 26, weight: .semibold, design: .rounded))
+                            .monospacedDigit()
+                    }
+                    Text(tagText(item))
+                        .font(.caption.weight(.medium))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .foregroundStyle(item.canTrash ? Color.accentColor : .secondary)
+                        .background((item.canTrash ? Color.accentColor : Color.secondary).opacity(0.12), in: Capsule())
+                    Text(item.note)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Divider()
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("位置").font(.caption).foregroundStyle(.secondary)
+                        Text(item.url.path)
+                            .font(.caption)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    VStack(spacing: 8) {
+                        if item.canTrash {
+                            let selected = store.selectedCleanupIDs.contains(item.id)
+                            Button {
+                                store.setCleanupSelected(item, selected: !selected)
+                            } label: {
+                                Text(selected ? "从清理中移除" : "加入清理").frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(selected ? .secondary : .accentColor)
+                            .disabled(store.isCleaning)
+                        }
+                        Button { store.revealSelected() } label: {
+                            Text("在 Finder 中显示").frame(maxWidth: .infinity)
+                        }
+                    }
+                    .controlSize(.large)
+                    .buttonStyle(.bordered)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 4)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(18)
+            }
+        } else {
+            ContentUnavailableView("未选择项目", systemImage: "sidebar.right", description: Text("在列表中点一项查看来源和路径。"))
+        }
+    }
+
+    private func tagText(_ item: ScanItem) -> String {
+        guard item.canTrash else { return "仅提示 · 由你处理" }
+        return item.risk == .a ? "可再生缓存" : "应用缓存 · 先退出对应应用"
+    }
+
     private func cleanupReportBanner(_ report: CleanupReport) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Image(systemName: report.movedCount > 0 ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
                     .foregroundStyle(report.movedCount > 0 ? .green : .orange)
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(report.movedCount > 0
                          ? "已移入废纸篓 \(report.movedCount.formatted()) 项 · \(ByteFormat.string(report.movedBytes))"
                          : "没有项目被移动")
@@ -102,12 +390,10 @@ struct MainView: View {
                     }
                 }
                 Spacer()
-                Button { store.cleanupReport = nil } label: {
-                    Image(systemName: "xmark")
-                }
-                .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
-                .help("关闭")
+                Button { store.cleanupReport = nil } label: { Image(systemName: "xmark") }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
+                    .help("关闭")
             }
             if !report.failures.isEmpty {
                 DisclosureGroup {
@@ -134,301 +420,9 @@ struct MainView: View {
                 .padding(.leading, 26)
             }
         }
-        .padding(14)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    private var welcomeContent: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            HStack(spacing: 28) {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("先扫描，看看空间去哪了")
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
-                        .lineLimit(2)
-                    Text("先快速查看常见缓存；也可以完整扫描文件夹，找出大工程和大文件。")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    HStack(spacing: 12) {
-                        Button { store.scanKnownCaches() } label: {
-                            Label("快速扫描空间", systemImage: "magnifyingglass")
-                                .font(.headline)
-                                .foregroundStyle(.indigo)
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 12)
-                                .background(.white, in: RoundedRectangle(cornerRadius: 12))
-                        }
-                        .buttonStyle(.plain)
-                        Button { store.chooseFolder() } label: {
-                            Text("选择文件夹…")
-                                .font(.headline)
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.7)))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    Text("快速扫描覆盖已识别缓存和旧录音提示；完整扫描可能需要几分钟。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 10)
-                brandIcon(132)
-            }
-            .padding(24)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                LinearGradient(colors: [.indigo, .blue], startPoint: .topLeading, endPoint: .bottomTrailing),
-                in: RoundedRectangle(cornerRadius: 20)
-            )
-            .foregroundStyle(.white)
-
-            VStack(alignment: .leading, spacing: 14) {
-                Text("你的磁盘")
-                    .font(.title3.bold())
-                HStack(spacing: 14) {
-                    volumeCard("Mac 内置盘", icon: "laptopcomputer", url: FileManager.default.homeDirectoryForCurrentUser, actionTitle: "完整扫描我的文件")
-                    if let external = otherVolumes.first {
-                        volumeCard(external.lastPathComponent, icon: "externaldrive", url: external, actionTitle: "扫描这块磁盘")
-                    }
-                }
-            }
-
-            HStack(spacing: 16) {
-                explanation("1", "扫描", "只读统计文件与目录")
-                explanation("2", "审阅", "项目只提示，缓存说明来源")
-                explanation("3", "处理", "你确认后才移入废纸篓")
-            }
-        }
-    }
-
-    private func volumeCard(_ title: String, icon: String, url: URL, actionTitle: String) -> some View {
-        let capacity = volumeCapacity(url)
-        return Button { store.scanLocation(url) } label: {
-            VStack(alignment: .leading, spacing: 15) {
-                Label(title, systemImage: icon)
-                    .font(.headline)
-                HStack(alignment: .firstTextBaseline, spacing: 5) {
-                    Text(capacity.map { ByteFormat.string($0.free) } ?? "—")
-                        .font(.title2.bold())
-                    Text("可用")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                if let capacity, capacity.total > 0 {
-                    ProgressView(value: Double(capacity.total - capacity.free), total: Double(capacity.total))
-                        .tint(.blue)
-                    Text("总容量 \(ByteFormat.string(capacity.total))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                HStack {
-                    Text(actionTitle)
-                    Spacer()
-                    Image(systemName: "arrow.right")
-                }
-                .font(.headline)
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(.blue, in: RoundedRectangle(cornerRadius: 10))
-            }
-            .padding(18)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func explanation(_ number: String, _ title: String, _ subtitle: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Text(number)
-                .font(.caption.bold())
-                .foregroundStyle(.white)
-                .frame(width: 24, height: 24)
-                .background(.blue, in: Circle())
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.headline)
-                Text(subtitle).font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    private var scanningContent: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            HStack(spacing: 20) {
-                brandIcon(88)
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("正在扫描")
-                        .font(.largeTitle.bold())
-                    Text(store.root.lastPathComponent)
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            ProgressView()
-                .progressViewStyle(.linear)
-                .tint(.blue)
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(store.progress.scannedCount.formatted())
-                    .font(.system(size: 38, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                Text("项已检查")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                Text("当前目录")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Text(store.progress.currentFolder)
-                    .font(.callout)
-                    .lineLimit(2)
-                    .textSelection(.enabled)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-            HStack {
-                Label("只读取文件大小与位置，不移动文件", systemImage: "lock.shield")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("取消扫描") { store.cancelScan() }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-            }
-        }
-        .padding(28)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.blue.opacity(0.05), in: RoundedRectangle(cornerRadius: 20))
-    }
-
-    private func resultContent(_ result: ScanResult) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(result.isQuickScan ? "常见缓存扫描完成" : "扫描完成").font(.largeTitle.bold())
-                    Text(result.isQuickScan ? "常见缓存位置 · \(result.root.path)" : result.root.path)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                        .lineLimit(2)
-                    Text("已检查 \(result.scannedCount.formatted()) 项 · 扫描只读")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                if result.isQuickScan {
-                    Button("完整扫描我的文件") { store.scanLocation(result.root) }
-                        .buttonStyle(.bordered)
-                } else {
-                    Button("快速扫描空间") { store.scanKnownCaches() }
-                        .buttonStyle(.bordered)
-                }
-                Button { store.scan() } label: {
-                    Label("重新扫描", systemImage: "arrow.clockwise")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(store.isScanning)
-            }
-
-            HStack(spacing: 12) {
-                if let free = result.volumeFreeBytes {
-                    summaryCard("磁盘可用", ByteFormat.string(free), icon: "internaldrive")
-                }
-                summaryCard(result.isQuickScan ? "已识别缓存" : "可审阅缓存", ByteFormat.string(cacheBytes(result)), icon: "arrow.triangle.2.circlepath")
-                summaryCard("工程与人工审阅", "\(result.items.filter { $0.kind == .project || $0.kind == .largeFile || $0.kind == .review || $0.kind == .folder }.count) 项", icon: "folder")
-            }
-
-            if let free = result.volumeFreeBytes, free < 6 * 1_073_741_824 {
-                Label("磁盘可用空间低于 6 GB。请先审阅 A 类缓存；废纸篓未清空前不会真正释放空间。", systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
-            }
-            HStack(spacing: 16) {
-                Text("A 可再生 \(result.items.filter { $0.risk == .a }.count) 项")
-                Text("B 应用缓存 \(result.items.filter { $0.risk == .b }.count) 项")
-                Text("C 人工判断 \(result.items.filter { $0.risk == .c }.count) 项")
-            }
-            .font(.caption.weight(.medium))
-            .foregroundStyle(.secondary)
-
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("扫描结果")
-                        .font(.title3.bold())
-                    Text(result.isQuickScan ? "这里是已识别缓存，不代表整盘可释放空间；逐项核对后再处理。" : "缓存可勾选；工程、大文件和原软件生成数据只供查看。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Picker("显示", selection: $store.filter) {
-                    ForEach(ItemFilter.allCases) { item in Text(item.rawValue).tag(item) }
-                }
-                .pickerStyle(.segmented)
-                .frame(maxWidth: 380)
-                .onChange(of: store.filter) { _, _ in store.selectFirstVisibleItem() }
-            }
-
-            if store.filter != .projects && !store.eligibleItems.isEmpty {
-                HStack(spacing: 12) {
-                    Text("可清理缓存 \(store.eligibleItems.count) 项")
-                        .font(.subheadline.weight(.semibold))
-                    Spacer()
-                    Button("全选可清理缓存") { store.selectAllEligible() }
-                        .disabled(store.isCleaning)
-                    Button("清空选择") { store.clearCleanupSelection() }
-                        .disabled(store.selectedCleanupIDs.isEmpty || store.isCleaning)
-                }
-            }
-
-            HStack(spacing: 0) {
-                itemList
-                Divider()
-                inspector.frame(width: 280)
-            }
-            .frame(minHeight: 390)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
-
-            if result.skippedCount > 0 {
-                Label("\(result.skippedCount) 个受保护、无权限或链接项目未计入；这里的数字不是整盘精确占用。", systemImage: "info.circle")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private var selectionBar: some View {
-        HStack(spacing: 20) {
-            VStack(alignment: .leading, spacing: 3) {
-                if store.isCleaning {
-                    Text("正在移入废纸篓：\(store.cleanedCount)/\(store.selectedCleanupItems.count) 项")
-                        .font(.headline)
-                } else {
-                    Text("已选择 \(store.selectedCleanupItems.count) 项 · \(ByteFormat.string(store.selectedCleanupBytes))")
-                        .font(.headline)
-                }
-                Text("移入废纸篓后仍可恢复；清空废纸篓才会释放空间。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            if store.isCleaning { ProgressView().controlSize(.small) }
-            Button("查看并移入废纸篓…") { store.showTrashConfirmation = true }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(store.selectedCleanupItems.isEmpty || store.isCleaning)
-        }
-        .padding(.horizontal, 28)
-        .padding(.vertical, 14)
-        .background(.regularMaterial)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
     }
 
     private var cleanupReviewSheet: some View {
@@ -469,101 +463,7 @@ struct MainView: View {
         .frame(width: 640, height: 460)
     }
 
-    private func summaryCard(_ title: String, _ value: String, icon: String) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label(title, systemImage: icon)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.title2.bold())
-                .monospacedDigit()
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    private var itemList: some View {
-        List(selection: $store.selectedID) {
-            ForEach(store.displayedItems) { item in
-                HStack(spacing: 10) {
-                    if item.canTrash {
-                        Toggle("选择 \(item.name)", isOn: Binding(
-                            get: { store.selectedCleanupIDs.contains(item.id) },
-                            set: { store.setCleanupSelected(item, selected: $0) }
-                        ))
-                        .labelsHidden()
-                        .toggleStyle(.checkbox)
-                        .disabled(store.isCleaning)
-                    } else {
-                        Image(systemName: "lock.shield")
-                            .frame(width: 20)
-                            .foregroundStyle(.secondary)
-                    }
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(item.name).fontWeight(.medium).lineLimit(1)
-                        Text("\(item.risk.rawValue) · \(item.url.deletingLastPathComponent().path)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    Spacer()
-                    Text(ByteFormat.string(item.bytes)).monospacedDigit().foregroundStyle(.secondary)
-                }
-                .tag(item.id)
-            }
-        }
-        .overlay {
-            if store.displayedItems.isEmpty {
-                ContentUnavailableView(
-                    store.filter == .caches ? "没有发现可清理缓存" : "没有匹配项目",
-                    systemImage: "checkmark.circle"
-                )
-            }
-        }
-    }
-
-    private var inspector: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if let item = store.selectedItem {
-                Image(systemName: symbol(for: item.kind))
-                    .font(.largeTitle)
-                    .foregroundStyle(item.kind == .cache ? .blue : .secondary)
-                Text(item.name).font(.title3.bold()).lineLimit(2)
-                LabeledContent("类型", value: item.kind.rawValue)
-                LabeledContent("分级", value: item.risk.rawValue)
-                LabeledContent("大小", value: ByteFormat.string(item.bytes))
-                Button("在 Finder 中显示") { store.revealSelected() }
-                    .controlSize(.large)
-                if item.canTrash {
-                    Button(store.selectedCleanupIDs.contains(item.id) ? "从待清理中移除" : "加入待清理") {
-                        store.setCleanupSelected(item, selected: !store.selectedCleanupIDs.contains(item.id))
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .disabled(store.isCleaning)
-                } else {
-                    Label("仅提示，由你自行处理", systemImage: "lock.shield")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Divider()
-                Text(item.note).font(.callout).foregroundStyle(.secondary)
-                Text(item.url.path).font(.caption2).foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                Spacer()
-            } else {
-                Text("选择一个项目查看详情。").foregroundStyle(.secondary)
-                Spacer()
-            }
-        }
-        .padding(18)
-    }
-
-    private func locationButton(_ title: String, icon: String, url: URL) -> some View {
-        Button { store.scanLocation(url) } label: { Label(title, systemImage: icon) }
-            .buttonStyle(.plain)
-    }
+    // MARK: Helpers
 
     @ViewBuilder
     private func brandIcon(_ size: CGFloat) -> some View {
@@ -573,7 +473,8 @@ struct MainView: View {
                 .interpolation(.high)
                 .aspectRatio(contentMode: .fill)
                 .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: size * 0.22))
+                .clipShape(RoundedRectangle(cornerRadius: size * 0.225, style: .continuous))
+                .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
         } else {
             Image(systemName: "externaldrive.fill.badge.checkmark")
                 .resizable()
@@ -582,18 +483,15 @@ struct MainView: View {
         }
     }
 
-    private func symbol(for kind: ScanKind) -> String {
-        switch kind {
-        case .cache: "arrow.triangle.2.circlepath"
-        case .project: "film.stack"
-        case .largeFile: "doc"
-        case .folder: "folder"
-        case .review: "hand.raised"
+    private func totalBytes(_ items: [ScanItem]) -> Int64 {
+        items.reduce(0) { sum, item in
+            let addition = sum.addingReportingOverflow(item.bytes)
+            return addition.overflow ? Int64.max : addition.partialValue
         }
     }
 
-    private func cacheBytes(_ result: ScanResult) -> Int64 {
-        result.items.filter { $0.kind == .cache }.reduce(0) { $0 + $1.bytes }
+    private func volumeName(_ url: URL) -> String {
+        (try? url.resourceValues(forKeys: [.volumeLocalizedNameKey]).volumeLocalizedName) ?? "磁盘"
     }
 
     private func volumeCapacity(_ url: URL) -> (total: Int64, free: Int64)? {
@@ -614,5 +512,19 @@ struct MainView: View {
             let values = try? volume.resourceValues(forKeys: [.isSymbolicLinkKey, .volumeIsBrowsableKey])
             return values?.isSymbolicLink != true && values?.volumeIsBrowsable != false
         }
+    }
+}
+
+private struct SizeBar: View {
+    let fraction: Double
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule().fill(.quaternary)
+                Capsule().fill(.tint).frame(width: max(3, proxy.size.width * min(max(fraction, 0), 1)))
+            }
+        }
+        .frame(width: 56, height: 5)
     }
 }
