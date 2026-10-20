@@ -65,7 +65,9 @@ struct SafetyPolicy: Sendable {
     func reviewDescription(for url: URL, isDirectory: Bool) -> String? {
         guard isDirectory else { return nil }
         let path = CanonicalPath.url(url).path
-        if url.lastPathComponent == "node_modules", hasNodeManifest(near: url) {
+        // Only the outermost node_modules; nested ones are already counted inside it.
+        if url.lastPathComponent == "node_modules", hasNodeManifest(near: url),
+           !url.deletingLastPathComponent().path.contains("/node_modules") {
             return "项目依赖目录；重建可能耗时，且可能影响当前工程。只提示占用，由你在工程内决定。"
         }
         if path == home.appending(path: "Library/Application Support/Shandianshuo/recordings").path {
@@ -182,6 +184,12 @@ struct SafetyPolicy: Sendable {
             relative == "Library/Caches/Homebrew" ||
             relative.hasPrefix("Library/Application Support/Adobe/Common/") ||
             relative.hasPrefix("Library/Caches/Adobe/After Effects/") {
+            return .a
+        }
+        // Build artifacts and tool caches regenerate on the next build/run; no app needs quitting.
+        let name = url.lastPathComponent
+        if [".build", "__pycache__", ".pytest_cache", ".mypy_cache"].contains(name) ||
+            (name == "cache" && url.deletingLastPathComponent().lastPathComponent == ".next") {
             return .a
         }
         return .b

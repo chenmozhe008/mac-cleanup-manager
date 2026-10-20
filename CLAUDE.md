@@ -24,6 +24,20 @@
 
 - 本机只有命令行工具，**`@State` 等 SwiftUI 宏编译不过**（缺 SwiftUIMacros 插件）。视图状态一律放进 `ScanStore` 的 `@Published`
 
+## 分类与功能（2026-10-21）
+
+- 分类（`ItemFilter`）：可放心清理（青）/ 剪辑与设计软件（粉）/ 微信与企业微信（绿）/ 需要你判断（琥珀）/ 大文件与工程（紫）
+- 剪辑软件：AE / Final Cut / 达芬奇 / Blender 规则在 `CreativeApps.swift`；已安装的每个软件都单独一张卡，没缓存也显示「目前没有缓存」+ 缓存在哪 / 怎么清；快速扫描下 FCP、达芬奇标「完整扫描才查得到」
+- 微信 / 企业微信：**只读量大小，永不提供删除**（`DiskScanner.chatAppUsage`）。超 2 GB 结果页出一行提醒 → 「怎么清 ›」进专页（分步说明 + 哪些能删，文案在 `ChatGuide`）
+- 记忆：选过的文件夹固定在左栏（UserDefaults `savedFolders`）；上次扫描结果存 `~/Library/Application Support/MacSpaceKeeper/last-scan.json`，启动直接显示；上次看的分类 `lastFilter`；同范围上次检查项数用来估扫描进度
+- 权限：用 `~/Library/Safari` 可读判断「完全磁盘访问」；未开启时左栏下方引导去开
+- 门槛：工程/应用数据 < 200 MB、「需要你判断」< 50 MB 不列；嵌套 node_modules 只列最外层；扫描页「边扫边发现」只显示 ≥ 5 MB
+
+## 验证方法（不抢用户鼠标）
+
+- 截图只截本 App 窗口：按 PID 取最大窗口 ID → `screencapture -l <id>`（不受其他窗口遮挡）
+- 切分类：`defaults write com.forwardyan.MacSpaceKeeper lastFilter "<分类名>"` 后重开 App；**不要用模拟鼠标点击**，用户可能在用电脑（2026-10-20 点到过微信）
+
 ## 图标
 
 - `Resources/AppIcon-source.png` 必须是**满版不透明正方形**（1024，无透明圆角）。macOS 26+ 会自动套圆角；带透明边的老式图标会被塞进灰色方框

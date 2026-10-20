@@ -15,22 +15,41 @@ final class ScanStore: ObservableObject {
     @Published var showTrashConfirmation = false
     @Published var isCleaning = false
     @Published var cleanedCount = 0
-    @Published var filter: ItemFilter = .caches
+    @Published var filter: ItemFilter = .caches {
+        didSet { UserDefaults.standard.set(filter.rawValue, forKey: Keys.lastFilter) }
+    }
     @Published var hoveredID: URL?
+    /// Items found so far in the running scan, newest last.
+    @Published var liveFound: [ScanItem] = []
+    @Published var savedFolders: [URL] = []
+    @Published var hasFullDiskAccess = false
+    @Published var chatAlertDismissed = false
 
     let policy = SafetyPolicy()
     private var scanID = UUID()
     private var scanTask: Task<Void, Never>?
     private var quickMode = false
 
-
-    var displayedItems: [ScanItem] {
-        guard let result else { return [] }
-        return result.items.filter { filter.contains($0.kind) }
+    private enum Keys {
+        static let savedFolders = "savedFolders"
+        static let scanSizes = "scanSizes"
+        static let lastFilter = "lastFilter"
     }
 
+    init() {
+        savedFolders = (UserDefaults.standard.stringArray(forKey: Keys.savedFolders) ?? [])
+            .map { URL(fileURLWithPath: $0) }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+        refreshFullDiskAccess()
+        loadLastResult()
+    }
+
+    // MARK: Derived data
+
+    var displayedItems: [ScanItem] { items(in: filter) }
+
     func items(in category: ItemFilter) -> [ScanItem] {
-        result?.items.filter { category.contains($0.kind) } ?? []
+        result?.items.filter { category.contains($0) } ?? []
     }
 
     var scopeTitle: String {
@@ -39,22 +58,67 @@ final class ScanStore: ObservableObject {
         return root.lastPathComponent
     }
 
+    var isQuickScope: Bool { quickMode }
+
     var selectedItem: ScanItem? { displayedItems.first { $0.id == selectedID } }
 
     var eligibleItems: [ScanItem] {
         result?.items.filter { $0.kind == .cache && $0.canTrash } ?? []
     }
 
+    /// Cleanable items in the current category (footer actions work per category).
+    var eligibleInFilter: [ScanItem] {
+        displayedItems.filter { $0.kind == .cache && $0.canTrash }
+    }
+
     var selectedCleanupItems: [ScanItem] {
         eligibleItems.filter { selectedCleanupIDs.contains($0.id) }
     }
 
-    var selectedCleanupBytes: Int64 {
-        selectedCleanupItems.reduce(0) { sum, item in
+    var selectedCleanupBytes: Int64 { Self.sum(selectedCleanupItems) }
+
+    /// Apps to quit before cleaning the current selection.
+    var appsToQuit: [String] {
+        var names: [String] = []
+        for item in selectedCleanupItems {
+            let name: String?
+            if let app = CreativeApp.of(item) {
+                name = app.title
+            } else if item.risk == .b {
+                name = ItemPresentation.info(for: item).title
+            } else {
+                name = nil
+            }
+            if let name, !names.contains(name) { names.append(name) }
+        }
+        return names
+    }
+
+    /// Chat apps worth a reminder: over 2 GB, or unreadable without Full Disk Access.
+    var chatAlerts: [ChatAppUsage] {
+        guard !chatAlertDismissed, let result else { return [] }
+        return result.chatApps.filter { ($0.bytes ?? 0) >= 2_000_000_000 }
+    }
+
+    var chatNeedsAccess: Bool {
+        guard !chatAlertDismissed, let result else { return false }
+        return result.chatApps.contains { $0.bytes == nil }
+    }
+
+    /// Fraction of the last scan of the same scope, when one is known.
+    var estimatedProgress: Double? {
+        guard let expected = scanSizes[scopeKey], expected > 0 else { return nil }
+        return min(Double(progress.scannedCount) / Double(expected), 0.99)
+    }
+
+    static func sum(_ items: [ScanItem]) -> Int64 {
+        items.reduce(0) { sum, item in
             let addition = sum.addingReportingOverflow(item.bytes)
             return addition.overflow ? Int64.max : addition.partialValue
         }
     }
+
+    // MARK: Selection
 
     func setCleanupSelected(_ item: ScanItem, selected: Bool) {
         guard !isCleaning, item.kind == .cache, item.canTrash,
@@ -68,18 +132,18 @@ final class ScanStore: ObservableObject {
 
     func selectAllEligible() {
         guard !isCleaning else { return }
-        selectedCleanupIDs = Set(eligibleItems.map(\.id))
+        selectedCleanupIDs.formUnion(eligibleInFilter.map(\.id))
     }
 
-    /// Regenerable caches (risk A) need no app to be quit, so they are the safe one-click pick.
+    /// Regenerable caches (risk A, outside creative apps) need no app to be quit: the safe one-click pick.
     func selectReusable() {
         guard !isCleaning else { return }
-        selectedCleanupIDs = Set(eligibleItems.filter { $0.risk == .a }.map(\.id))
+        selectedCleanupIDs = Set(eligibleItems.filter { $0.risk == .a && CreativeApp.of($0) == nil }.map(\.id))
     }
 
     func clearCleanupSelection() {
         guard !isCleaning else { return }
-        selectedCleanupIDs.removeAll()
+        selectedCleanupIDs.subtract(eligibleInFilter.map(\.id))
     }
 
     func selectCategory(_ category: ItemFilter) {
@@ -87,7 +151,7 @@ final class ScanStore: ObservableObject {
         selectedID = nil
     }
 
-    var isQuickScope: Bool { quickMode }
+    // MARK: Locations
 
     func chooseFolder() {
         guard !isCleaning else { return }
@@ -95,8 +159,27 @@ final class ScanStore: ObservableObject {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.prompt = "扫描此文件夹"
-        if panel.runModal() == .OK, let url = panel.url { scanLocation(url) }
+        panel.prompt = "添加并扫描"
+        if panel.runModal() == .OK, let url = panel.url {
+            addSavedFolder(url)
+            scanLocation(url)
+        }
+    }
+
+    func addSavedFolder(_ url: URL) {
+        let url = url.standardizedFileURL
+        guard url.path != policy.home.path, !savedFolders.contains(url) else { return }
+        savedFolders.append(url)
+        persistSavedFolders()
+    }
+
+    func removeSavedFolder(_ url: URL) {
+        savedFolders.removeAll { $0 == url }
+        persistSavedFolders()
+    }
+
+    private func persistSavedFolders() {
+        UserDefaults.standard.set(savedFolders.map(\.path), forKey: Keys.savedFolders)
     }
 
     func setRoot(_ url: URL) {
@@ -126,9 +209,38 @@ final class ScanStore: ObservableObject {
         scan()
     }
 
+    // MARK: Permissions
+
+    /// ~/Library/Safari is readable only with Full Disk Access, so it is a reliable probe.
+    func refreshFullDiskAccess() {
+        let probe = policy.home.appending(path: "Library/Safari").path
+        hasFullDiskAccess = (try? FileManager.default.contentsOfDirectory(atPath: probe)) != nil
+    }
+
+    func openFullDiskAccessSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    func openApp(bundleID: String) {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return }
+        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+    }
+
+    // MARK: Scanning
+
+    private var scopeKey: String { quickMode ? "quick" : root.path }
+
+    private var scanSizes: [String: Int] {
+        get { UserDefaults.standard.dictionary(forKey: Keys.scanSizes) as? [String: Int] ?? [:] }
+        set { UserDefaults.standard.set(newValue, forKey: Keys.scanSizes) }
+    }
+
     func scan(clearMessage: Bool = true) {
         guard !isScanning, !isCleaning else { return }
         isScanning = true
+        liveFound = []
         progress = ScanProgress(scannedCount: 0, currentFolder: root.path)
         if clearMessage {
             message = nil
@@ -140,20 +252,29 @@ final class ScanStore: ObservableObject {
         let scanPolicy = policy
         let isQuick = quickMode
         scanTask = Task.detached(priority: .userInitiated) { [weak self] in
-            let progressStore = self
-            let output = Result {
-                let scanner = DiskScanner(policy: scanPolicy)
-                return try isQuick ? scanner.scanKnownCaches { update in
-                    Task { @MainActor in
-                        guard let progressStore, progressStore.scanID == thisScan, progressStore.isScanning else { return }
-                        if update.scannedCount >= progressStore.progress.scannedCount { progressStore.progress = update }
-                    }
-                } : scanner.scan(scanRoot) { update in
-                    Task { @MainActor in
-                        guard let progressStore, progressStore.scanID == thisScan, progressStore.isScanning else { return }
-                        if update.scannedCount >= progressStore.progress.scannedCount { progressStore.progress = update }
-                    }
+            let store = self
+            let onProgress: @Sendable (ScanProgress) -> Void = { update in
+                Task { @MainActor in
+                    guard let store, store.scanID == thisScan, store.isScanning else { return }
+                    if update.scannedCount >= store.progress.scannedCount { store.progress = update }
                 }
+            }
+            var scanner = DiskScanner(policy: scanPolicy)
+            scanner.onFound = { item in
+                Task { @MainActor in
+                    guard let store, store.scanID == thisScan, store.isScanning else { return }
+                    // A cache folder replaces anything already listed inside it, same as the final result.
+                    if item.kind == .cache {
+                        let prefix = item.url.path + "/"
+                        store.liveFound.removeAll { $0.url.path.hasPrefix(prefix) }
+                    }
+                    store.liveFound.append(item)
+                }
+            }
+            let output = Result {
+                var value = try isQuick ? scanner.scanKnownCaches(onProgress: onProgress) : scanner.scan(scanRoot, onProgress: onProgress)
+                value.chatApps = scanner.chatAppUsage()
+                return value
             }
             await MainActor.run {
                 guard let self, self.scanID == thisScan else { return }
@@ -163,8 +284,11 @@ final class ScanStore: ObservableObject {
                 case .success(let value):
                     self.result = value
                     self.selectedCleanupIDs.removeAll()
-                    self.filter = ItemFilter.allCases.first { category in value.items.contains { category.contains($0.kind) } } ?? .caches
+                    self.chatAlertDismissed = false
+                    self.filter = ItemFilter.allCases.first { category in value.items.contains { category.contains($0) } } ?? .caches
                     self.selectedID = nil
+                    self.scanSizes[self.scopeKey] = value.scannedCount
+                    self.saveLastResult(value)
                 case .failure(let error):
                     self.message = error is CancellationError ? "扫描已取消。" : error.localizedDescription
                 }
@@ -179,12 +303,39 @@ final class ScanStore: ObservableObject {
         scanID = UUID()
         isScanning = false
         message = "扫描已取消。"
+        // Return to the previous result instead of an empty screen.
+        loadLastResult()
     }
 
-    func revealSelected() {
-        guard let selectedItem else { return }
-        NSWorkspace.shared.activateFileViewerSelecting([selectedItem.url])
+    // MARK: Last result
+
+    private var lastResultURL: URL {
+        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appending(path: "MacSpaceKeeper")
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory.appending(path: "last-scan.json")
     }
+
+    private func saveLastResult(_ value: ScanResult) {
+        if let data = try? JSONEncoder().encode(value) { try? data.write(to: lastResultURL, options: .atomic) }
+    }
+
+    /// Shows the previous scan on launch. Cleanup still re-checks each path's identity before moving.
+    private func loadLastResult() {
+        guard let data = try? Data(contentsOf: lastResultURL),
+              let value = try? JSONDecoder().decode(ScanResult.self, from: data) else { return }
+        result = value
+        root = value.root
+        quickMode = value.isQuickScan
+        // Reopen on the category last viewed.
+        if let saved = UserDefaults.standard.string(forKey: Keys.lastFilter).flatMap(ItemFilter.init(rawValue:)) {
+            filter = saved
+        } else {
+            filter = ItemFilter.allCases.first { category in value.items.contains { category.contains($0) } } ?? .caches
+        }
+    }
+
+    // MARK: Cleanup
 
     func trashSelectedItems() {
         let items = selectedCleanupItems
@@ -225,23 +376,20 @@ final class ScanStore: ObservableObject {
 
 enum ItemFilter: String, CaseIterable, Identifiable {
     case caches = "可放心清理"
+    case creative = "剪辑与设计软件"
+    case chat = "微信与企业微信"
     case review = "需要你判断"
     case large = "大文件与工程"
     var id: String { rawValue }
 
-    var symbol: String {
+    func contains(_ item: ScanItem) -> Bool {
+        let creative = CreativeApp.of(item) != nil
         switch self {
-        case .caches: "sparkles"
-        case .review: "hand.raised"
-        case .large: "shippingbox"
-        }
-    }
-
-    func contains(_ kind: ScanKind) -> Bool {
-        switch self {
-        case .caches: kind == .cache
-        case .review: kind == .review
-        case .large: kind == .project || kind == .largeFile
+        case .caches: return item.kind == .cache && !creative
+        case .creative: return creative
+        case .chat: return false
+        case .review: return item.kind == .review && !creative
+        case .large: return item.kind == .project || item.kind == .largeFile
         }
     }
 }

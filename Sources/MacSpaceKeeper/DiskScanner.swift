@@ -6,6 +6,10 @@ struct DiskScanner: Sendable {
     let largeFileThreshold: Int64
     /// Projects and app data below this are noise in "大文件与工程" (config dirs, tiny .xcodeproj).
     let minProjectBytes: Int64 = 200_000_000
+    /// "需要你判断" items below this are not worth a decision.
+    let minReviewBytes: Int64 = 50_000_000
+    /// Called for every item as it is found, so the scanning screen can show live discoveries.
+    var onFound: (@Sendable (ScanItem) -> Void)?
 
     init(policy: SafetyPolicy = SafetyPolicy(), largeFileThreshold: Int64 = 1_000_000_000) {
         self.policy = policy
@@ -69,12 +73,12 @@ struct DiskScanner: Sendable {
 
         if !metadata.isDirectory {
             if policy.isProject(url), !insideProject, url != root, metadata.size >= minProjectBytes {
-                items.append(item(url, kind: .project, bytes: metadata.size, note: "工程文件；只提示占用，不提供删除操作。", canTrash: false, identity: metadata.identity))
+                emit(&items, item(url, kind: .project, bytes: metadata.size, note: "工程文件；只提示占用，不提供删除操作。", canTrash: false, identity: metadata.identity))
             } else if !insideProject, url != root,
                       metadata.size >= largeFileThreshold || (metadata.size >= 100_000_000 && ["dmg", "pkg"].contains(url.pathExtension.lowercased())) {
                 let installer = ["dmg", "pkg"].contains(url.pathExtension.lowercased())
                 let note = installer ? "安装包可能是旧版本，也可能是保留的交付资料；只提示占用，请在 Finder 中自行判断。" : "大文件仅提示；请在 Finder 中自行决定是否处理。"
-                items.append(item(url, kind: .largeFile, bytes: metadata.size, note: note, canTrash: false, identity: metadata.identity))
+                emit(&items, item(url, kind: .largeFile, bytes: metadata.size, note: note, canTrash: false, identity: metadata.identity))
             }
             return metadata.size
         }
@@ -106,20 +110,20 @@ struct DiskScanner: Sendable {
                 // Too small to be worth listing; still counted in the parent total.
             } else if project {
                 let note = url.lastPathComponent == "Figma" ? "Figma 本地数据可能包含未同步的离线改动；只显示占用，请在 Figma 内处理。" : "项目工程或应用数据；只显示占用，不提供删除操作。"
-                items.append(item(url, kind: .project, bytes: sum, note: note, canTrash: false, identity: metadata.identity))
+                emit(&items, item(url, kind: .project, bytes: sum, note: note, canTrash: false, identity: metadata.identity))
             } else if let reviewNote {
                 if url.path == policy.home.appending(path: "Library/Application Support/Shandianshuo/recordings").path {
                     let old = oldRecordingSummary(at: url)
                     if old.count > 0 {
-                        items.append(item(url, kind: .review, bytes: old.bytes, note: "超过 15 天的录音 \(old.count) 条。\(reviewNote)", canTrash: false, identity: metadata.identity))
+                        emit(&items, item(url, kind: .review, bytes: old.bytes, note: "超过 15 天的录音 \(old.count) 条。\(reviewNote)", canTrash: false, identity: metadata.identity))
                     }
-                } else {
-                    items.append(item(url, kind: .review, bytes: sum, note: reviewNote, canTrash: false, identity: metadata.identity))
+                } else if sum >= minReviewBytes || CreativeApp.isReviewCache(url) {
+                    emit(&items, item(url, kind: .review, bytes: sum, note: reviewNote, canTrash: false, identity: metadata.identity))
                 }
             } else if let cacheNote {
                 // Hide descendants of a suggested cache to avoid overlapping actions.
                 items.removeAll { $0.url.path.hasPrefix(url.path + "/") }
-                items.append(item(url, kind: .cache, bytes: sum, note: cacheNote, canTrash: true, identity: metadata.identity))
+                emit(&items, item(url, kind: .cache, bytes: sum, note: cacheNote, canTrash: true, identity: metadata.identity))
             }
         }
         return sum
@@ -152,6 +156,45 @@ struct DiskScanner: Sendable {
     }
 
     private func identity(_ url: URL) throws -> FileIdentity { try metadata(url).identity }
+
+    private func emit(_ items: inout [ScanItem], _ item: ScanItem) {
+        items.append(item)
+        onFound?(item)
+    }
+
+    /// Read-only size of chat apps' data. These folders stay protected; this only measures them.
+    func chatAppUsage() -> [ChatAppUsage] {
+        let apps = [("com.tencent.xinWeChat", "微信"), ("com.tencent.WeWorkMac", "企业微信")]
+        let home = policy.home
+        let groupRoot = home.appending(path: "Library/Group Containers")
+        let groups = (try? FileManager.default.contentsOfDirectory(atPath: groupRoot.path)) ?? []
+        return apps.compactMap { bundleID, name in
+            var roots = [home.appending(path: "Library/Containers/\(bundleID)")]
+            roots += groups.filter { $0.hasSuffix(".\(bundleID)") }.map { groupRoot.appending(path: $0) }
+            roots = roots.filter { FileManager.default.fileExists(atPath: $0.path) }
+            guard !roots.isEmpty else { return nil }
+            var total: Int64 = 0
+            for root in roots {
+                // A protected container lists as unreadable without Full Disk Access.
+                guard (try? FileManager.default.contentsOfDirectory(atPath: root.path)) != nil else {
+                    return ChatAppUsage(id: bundleID, name: name, bytes: nil)
+                }
+                total += allocatedSize(of: root)
+            }
+            return ChatAppUsage(id: bundleID, name: name, bytes: total)
+        }
+    }
+
+    private func allocatedSize(of root: URL) -> Int64 {
+        let keys: [URLResourceKey] = [.isRegularFileKey, .totalFileAllocatedSizeKey]
+        guard let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: keys, options: [], errorHandler: { _, _ in true }) else { return 0 }
+        var total: Int64 = 0
+        for case let file as URL in enumerator {
+            guard let values = try? file.resourceValues(forKeys: Set(keys)), values.isRegularFile == true else { continue }
+            total += Int64(values.totalFileAllocatedSize ?? 0)
+        }
+        return total
+    }
 
     private func isMovable(_ url: URL) -> Bool {
         access(url.path, W_OK) == 0 && access(url.deletingLastPathComponent().path, W_OK) == 0

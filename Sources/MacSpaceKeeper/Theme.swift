@@ -16,6 +16,8 @@ enum Theme {
     static let amber = Color(red: 1.0, green: 0.71, blue: 0.28)
     static let orange = Color(red: 1.0, green: 0.42, blue: 0.24)
     static let slate = Color(red: 0.51, green: 0.57, blue: 0.71)
+    static let pink = Color(red: 1.0, green: 0.48, blue: 0.71)
+    static let green = Color(red: 0.2, green: 0.83, blue: 0.6)
 
     static let accent = LinearGradient(colors: [blue, cyan], startPoint: .leading, endPoint: .trailing)
     static let warning = LinearGradient(colors: [amber, orange], startPoint: .leading, endPoint: .trailing)
@@ -24,6 +26,8 @@ enum Theme {
     static func color(_ category: ItemFilter) -> Color {
         switch category {
         case .caches: cyan
+        case .creative: pink
+        case .chat: green
         case .review: amber
         case .large: violet
         }

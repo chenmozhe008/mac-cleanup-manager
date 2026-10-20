@@ -1,6 +1,6 @@
 import Foundation
 
-enum ScanKind: String, Sendable {
+enum ScanKind: String, Codable, Sendable {
     case cache = "可再生缓存"
     case project = "项目或资源库"
     case largeFile = "大文件"
@@ -8,13 +8,13 @@ enum ScanKind: String, Sendable {
     case folder = "文件夹"
 }
 
-enum ScanRisk: String, Sendable {
+enum ScanRisk: String, Codable, Sendable {
     case a = "A · 可再生缓存"
     case b = "B · 应用缓存"
     case c = "C · 人工判断"
 }
 
-struct ScanItem: Identifiable, Sendable {
+struct ScanItem: Identifiable, Codable, Sendable {
     let id: URL
     let url: URL
     let kind: ScanKind
@@ -27,12 +27,12 @@ struct ScanItem: Identifiable, Sendable {
     var name: String { url.lastPathComponent }
 }
 
-struct FileIdentity: Equatable, Sendable {
+struct FileIdentity: Equatable, Codable, Sendable {
     let device: UInt64
     let inode: UInt64
 }
 
-struct ScanResult: Sendable {
+struct ScanResult: Codable, Sendable {
     let root: URL
     let isQuickScan: Bool
     let items: [ScanItem]
@@ -42,6 +42,15 @@ struct ScanResult: Sendable {
     let skippedCount: Int
     let scannedCount: Int
     let scannedAt: Date
+    /// WeChat / WeCom data size, measured read-only and never offered for cleanup.
+    var chatApps: [ChatAppUsage] = []
+}
+
+struct ChatAppUsage: Codable, Sendable, Identifiable {
+    let id: String
+    let name: String
+    /// nil when macOS denied reading the app's data (needs Full Disk Access).
+    let bytes: Int64?
 }
 
 struct CleanupReport: Sendable {
