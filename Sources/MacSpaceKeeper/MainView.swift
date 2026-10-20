@@ -1091,18 +1091,32 @@ struct MainView: View {
         }
     }
 
+    /// Collapsed by default: size, status and the open button. The how-to opens on demand.
     private func chatGuideCard(_ chat: ChatAppUsage) -> some View {
         let bytes = chat.bytes ?? 0
         let over = bytes >= 2_000_000_000
+        let key = "chat:\(chat.id)"
+        let expanded = store.expandedGroups.contains(key)
         let version = NSWorkspace.shared.urlForApplication(withBundleIdentifier: chat.id)
             .flatMap { Bundle(url: $0)?.infoDictionary?["CFBundleShortVersionString"] as? String }
+        let toggle = {
+            withAnimation(.easeOut(duration: 0.18)) {
+                if expanded { store.expandedGroups.remove(key) } else { store.expandedGroups.insert(key) }
+            }
+        }
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 14) {
                 if let icon = ItemPresentation.appIcon(bundleID: chat.id) {
-                    Image(nsImage: icon).resizable().frame(width: 46, height: 46)
+                    Image(nsImage: icon).resizable().frame(width: 44, height: 44)
                 }
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(chat.name).font(.system(size: 17, weight: .semibold))
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(chat.name).font(.system(size: 17, weight: .semibold))
+                        Text(chat.bytes == nil ? "—" : ByteFormat.string(bytes))
+                            .font(.system(size: 17, weight: .bold))
+                            .monospacedDigit()
+                            .foregroundStyle(over ? Theme.amber : Theme.ink)
+                    }
                     if chat.bytes == nil {
                         Label("没权限读取，开启完全磁盘访问后才看得到", systemImage: "lock.fill")
                             .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.amber)
@@ -1113,63 +1127,59 @@ struct MainView: View {
                     }
                 }
                 Spacer(minLength: 8)
-                Text(chat.bytes == nil ? "—" : ByteFormat.string(bytes))
-                    .font(.system(size: 28, weight: .bold))
-                    .monospacedDigit()
-                    .foregroundStyle(over ? Theme.amber : Theme.ink)
-            }
-            .padding(18)
-
-            VStack(alignment: .leading, spacing: 10) {
-                Text("怎么清" + (version.map { "（\(chat.name) \($0)）" } ?? ""))
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.ink2)
-                ForEach(Array(ChatGuide.steps(for: chat.id).enumerated()), id: \.offset) { index, step in
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text("\(index + 1)")
-                            .font(.system(size: 11.5, weight: .bold))
-                            .foregroundStyle(Theme.green)
-                            .frame(width: 20, height: 20)
-                            .background(Circle().fill(Theme.green.opacity(0.14)))
-                        Text(step).font(.system(size: 13.5))
-                    }
+                Button(action: toggle) {
+                    Label(expanded ? "收起" : "怎么清", systemImage: expanded ? "chevron.up" : "chevron.down")
+                        .labelStyle(.titleAndIcon)
                 }
-                Text("菜单名以你当前版本为准，个别版本位置略有不同。")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Theme.ink3)
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .overlay(alignment: .top) { Rectangle().fill(Theme.line).frame(height: 1) }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("哪些能删").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink2)
-                ForEach(ChatGuide.tips, id: \.text) { tip in
-                    HStack(spacing: 8) {
-                        Image(systemName: tip.symbol)
-                            .foregroundStyle(tip.tint == "green" ? Theme.green : (tip.tint == "amber" ? Theme.amber : Theme.pink))
-                        Text(tip.text).foregroundStyle(Theme.ink)
-                    }
-                    .font(.system(size: 13))
-                }
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .overlay(alignment: .top) { Rectangle().fill(Theme.line).frame(height: 1) }
-
-            HStack {
-                Text("这个 App 不会动\(chat.name)的任何数据。").font(.system(size: 12)).foregroundStyle(Theme.ink3)
-                Spacer()
+                .buttonStyle(ToolbarButtonStyle())
                 if chat.bytes == nil {
-                    Button("去开启权限") { store.openFullDiskAccessSettings() }.buttonStyle(GhostButtonStyle())
+                    Button("去开启权限") { store.openFullDiskAccessSettings() }.buttonStyle(ToolbarButtonStyle())
                 }
-                Button("打开\(chat.name)") { store.openApp(bundleID: chat.id) }.buttonStyle(CTAButtonStyle())
+                Button { store.openApp(bundleID: chat.id) } label: {
+                    Label("打开\(chat.name)", systemImage: "arrow.up.forward.app")
+                }
+                .buttonStyle(ToolbarButtonStyle(prominent: true))
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 14)
-            .overlay(alignment: .top) { Rectangle().fill(Theme.line).frame(height: 1) }
+            .contentShape(Rectangle())
+            .onTapGesture(perform: toggle)
+
+            if expanded {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("怎么清" + (version.map { "（\(chat.name) \($0)）" } ?? ""))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.ink2)
+                    ForEach(Array(ChatGuide.steps(for: chat.id).enumerated()), id: \.offset) { index, step in
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Text("\(index + 1)")
+                                .font(.system(size: 11.5, weight: .bold))
+                                .foregroundStyle(Theme.green)
+                                .frame(width: 20, height: 20)
+                                .background(Circle().fill(Theme.green.opacity(0.14)))
+                            Text(step).font(.system(size: 13.5))
+                        }
+                    }
+                    Text("菜单名以你当前版本为准，个别版本位置略有不同。")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.ink3)
+                    Text("哪些能删").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink2).padding(.top, 6)
+                    ForEach(ChatGuide.tips, id: \.text) { tip in
+                        HStack(spacing: 8) {
+                            Image(systemName: tip.symbol)
+                                .foregroundStyle(tip.tint == "green" ? Theme.green : (tip.tint == "amber" ? Theme.amber : Theme.pink))
+                            Text(tip.text).foregroundStyle(Theme.ink)
+                        }
+                        .font(.system(size: 13))
+                    }
+                    Text("这个 App 不会动\(chat.name)的任何数据。").font(.system(size: 12)).foregroundStyle(Theme.ink3).padding(.top, 4)
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .overlay(alignment: .top) { Rectangle().fill(Theme.line).frame(height: 1) }
+                .transition(.opacity)
+            }
         }
         .glass()
     }
