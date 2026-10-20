@@ -45,11 +45,11 @@ enum AppInfo {
     }
 
     /// Matches LSMinimumSystemVersion and the arm64-only build.
-    static let requirements = "macOS 14 Sonoma 及以上 · Apple 芯片（M1 及更新）· macOS 26 起显示液态玻璃效果"
+    static let requirements = "macOS 14 Sonoma 及以上，Apple 芯片（M1 及更新）的 Mac。macOS 26 上会显示液态玻璃效果"
 
     static func sendFeedback() {
         let subject = "Mac 清理管家反馈 v\(version)"
-        let body = "\n\n—— 请描述遇到的问题，最好附截图 ——\n\(diagnostics)"
+        let body = "\n\n（请在这里描述遇到的问题，最好附一张截图）\n\(diagnostics)"
         var components = URLComponents()
         components.scheme = "mailto"
         components.path = feedbackEmail
@@ -75,11 +75,11 @@ enum AboutTab: String, CaseIterable, Identifiable {
 private enum Comparison {
     static let products = ["CleanMyMac", "柠檬清理", "BuhoCleaner", "DaisyDisk", "Mac 清理管家"]
     static let rows: [(title: String, cells: [String])] = [
-        ("价格", ["订阅制，约 $39.95/年起", "免费，开源", "买断约 $20–30；免费版只能自动清 3 GB", "$9.99 买断", "免费"]),
-        ("怎么删", ["一键智能清理", "一键清理", "一键清理", "自己挑，直接永久删除", "逐项确认，只移入废纸篓，可找回"]),
-        ("微信 / 企业微信", ["—", "深度扫描并清理聊天软件文件", "—", "只按文件夹看大小", "只看大小、不碰数据，教你在微信里清"]),
-        ("剪辑软件缓存", ["—", "—", "—", "不区分", "AE / Final Cut / 达芬奇 / Blender 分开讲，该回软件清的给步骤"]),
-        ("每一项看得懂吗", ["按类别汇总", "按类别汇总", "按类别汇总", "只有文件夹和大小", "App 图标 + 中文名 + 能不能删的理由"])
+        ("价格", ["订阅制，约 $39.95/年起", "免费，开源", "买断约 $20–30，免费版最多自动清理 3 GB", "$9.99 买断", "免费"]),
+        ("删除方式", ["一键清理", "一键清理", "一键清理", "自己选，直接永久删除", "逐项确认后放进废纸篓，可以找回"]),
+        ("微信 / 企业微信", ["—", "可以扫描并清理聊天文件", "—", "只显示文件夹大小", "显示占用，不动数据，告诉你在微信里怎么清"]),
+        ("剪辑软件缓存", ["—", "—", "—", "不区分", "按软件分开列出，需要回软件清理的给出步骤"]),
+        ("每一项说得清吗", ["按类别汇总", "按类别汇总", "按类别汇总", "只显示文件夹名和大小", "显示应用图标和中文名，并说明能不能删、为什么"])
     ]
 }
 
@@ -153,7 +153,7 @@ struct AboutView: View {
                         .background(Capsule().fill(Theme.blue.opacity(0.22)))
                         .overlay(Capsule().strokeBorder(Theme.blue.opacity(0.45)))
                 }
-                Text("作者 \(AppInfo.author) · 给做视频、做内容的人用的 Mac 清理工具")
+                Text("作者 \(AppInfo.author)，写给做视频、做内容的人")
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.ink2)
                 Label("系统要求：\(AppInfo.requirements)", systemImage: "desktopcomputer")
@@ -189,21 +189,21 @@ struct AboutView: View {
     private var intro: some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("安全第一：先看清，再由你决定").font(.system(size: 20, weight: .bold))
-                Text("只读扫描，逐项确认，只移入废纸篓。微信和剪辑工程这类删错就麻烦的东西，只告诉你在哪、怎么在原软件里处理。")
+                Text("先看清楚，再决定删不删").font(.system(size: 20, weight: .bold))
+                Text("扫描只读取文件的大小和位置，不会改动任何东西。要清理的内容由你逐项确认，统一放进废纸篓，后悔了还能拿回来。微信聊天、剪辑工程这类删错了找不回的，它只告诉你在哪儿、该在原软件里怎么处理。")
                     .font(.system(size: 13.5))
                     .foregroundStyle(Theme.ink2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack(alignment: .top, spacing: 12) {
-                pillar(Theme.cyan, "删了能找回", "所有清理只移入废纸篓，从不自动清空；点整行选中，同名缓存合并成一行，一次看清。")
-                pillar(Theme.pink, "懂剪辑软件", "AE、Final Cut、达芬奇、Blender 放在一起看：哪些这里能清，哪些要回软件里清、点哪几步。")
-                pillar(Theme.green, "微信只看不删", "微信、企业微信占了多少一眼看到，超过 2 GB 提醒；聊天文件一个不碰，教你在微信里清。")
+                pillar(Theme.cyan, "删错了能找回", "清理的东西都放进废纸篓，什么时候清空由你决定。点一行就能选中，几百个同名缓存会合成一行显示。")
+                pillar(Theme.pink, "认得剪辑软件", "After Effects、Final Cut、达芬奇、Blender 的缓存分开列出，告诉你哪些能在这里清，哪些得回到软件里清、具体点哪里。")
+                pillar(Theme.green, "不碰微信数据", "能看到微信和企业微信各占了多少空间，超过 2 GB 会提醒你。聊天记录和文件不会被动到，只告诉你在微信里怎么清。")
             }
             VStack(alignment: .leading, spacing: 8) {
-                Text("和常见工具比").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink2)
+                Text("和其他清理工具有什么不同").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink2)
                 comparisonTable
-                Text("以上信息整理自各产品官网和公开评测（2026 年 10 月），以各产品最新版本为准。")
+                Text("以上信息整理自各产品官网和公开评测（2026 年 10 月），实际以各产品最新版本为准。")
                     .font(.system(size: 11.5))
                     .foregroundStyle(Theme.ink3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -331,8 +331,8 @@ struct AboutView: View {
     private var feedback: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("用得不顺手、扫得不对，直接告诉我").font(.system(size: 20, weight: .bold))
-                Text("每封都会看。写清楚遇到什么、附一张截图，修起来最快。")
+                Text("用着不顺手，或者扫得不对，都可以告诉我").font(.system(size: 20, weight: .bold))
+                Text("每一封我都会看。说清楚遇到了什么，再附一张截图，我能更快找到问题。")
                     .font(.system(size: 13.5))
                     .foregroundStyle(Theme.ink2)
             }
@@ -344,10 +344,10 @@ struct AboutView: View {
                     .help("复制邮箱")
             }
             VStack(alignment: .leading, spacing: 10) {
-                Text("写反馈时最好带上").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink2)
-                tip("1", "你在做什么：扫哪个位置、点了哪一步")
-                tip("2", "看到了什么：最好截个图（⇧⌘4 截一块）")
-                tip("3", "版本信息：点「发反馈邮件」会自动带上，也可以手动复制")
+                Text("写反馈时最好包括").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink2)
+                tip("1", "当时在做什么，比如扫的是哪个位置、点了哪个按钮")
+                tip("2", "看到了什么，最好附一张截图（按 ⇧⌘4 可以截取一块区域）")
+                tip("3", "版本信息。点「发反馈邮件」会自动附上，也可以在下面复制")
                 HStack(spacing: 10) {
                     Text(AppInfo.diagnostics)
                         .font(.system(size: 12, design: .monospaced))

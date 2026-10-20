@@ -25,13 +25,13 @@ struct TrashService {
         let nsError = error as NSError
         if nsError.domain == NSCocoaErrorDomain {
             switch nsError.code {
-            case NSFileWriteNoPermissionError, NSFileReadNoPermissionError: return "系统或其他账户的目录，没有权限移动"
+            case NSFileWriteNoPermissionError, NSFileReadNoPermissionError: return "系统或其他账户的文件夹，没有权限移动"
             case NSFileNoSuchFileError: return "已不存在"
             default: break
             }
         }
         if nsError.domain == NSPOSIXErrorDomain, [Int(EPERM), Int(EACCES)].contains(nsError.code) {
-            return "系统或其他账户的目录，没有权限移动"
+            return "系统或其他账户的文件夹，没有权限移动"
         }
         return "移动失败"
     }

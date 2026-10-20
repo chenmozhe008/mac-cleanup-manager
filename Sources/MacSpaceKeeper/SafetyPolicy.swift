@@ -68,19 +68,19 @@ struct SafetyPolicy: Sendable {
         // Only the outermost node_modules; nested ones are already counted inside it.
         if url.lastPathComponent == "node_modules", hasNodeManifest(near: url),
            !url.deletingLastPathComponent().path.contains("/node_modules") {
-            return "项目依赖目录；重建可能耗时，且可能影响当前工程。只提示占用，由你在工程内决定。"
+            return "这是项目的依赖文件夹。删掉后要重新安装，可能影响正在做的工程，所以这里只显示占用，由你在工程里决定。"
         }
         if path == home.appending(path: "Library/Application Support/Shandianshuo/recordings").path {
-            return "闪电说录音；只统计超过 15 天的旧录音，仍需你逐项决定。"
+            return "闪电说的录音。这里只统计超过 15 天的旧录音，删不删由你逐条决定。"
         }
         if path == home.appending(path: "Library/Application Support/Notion/Partitions/notion/Service Worker").path {
-            return "Notion 离线缓存可能含尚未同步的改动；只提示占用，请在 Notion 确认同步状态后处理。"
+            return "Notion 的离线缓存可能包含还没同步的改动。这里只显示占用，请先在 Notion 里确认已经同步，再自行处理。"
         }
         if url.lastPathComponent == "Render Files", path.contains(".fcpbundle/") {
-            return "Final Cut 渲染文件；请在 Final Cut 中选中资源库，使用“文件 → 删除已生成的资源库文件”，优先选择仅删除未使用的渲染文件。这里不直接清理。"
+            return "Final Cut 的渲染文件。请在 Final Cut 中选中资源库，选择「文件 → 删除已生成的资源库文件」，建议只删除未使用的渲染文件。这里不直接清理。"
         }
         if url.lastPathComponent == "CacheClip" {
-            return "DaVinci Resolve 渲染缓存；请先确认对应工程和缓存位置，再在 Resolve 中使用删除渲染缓存功能。这里不直接清理。"
+            return "达芬奇的渲染缓存。请先确认对应的工程和缓存位置，再在达芬奇里用「删除渲染缓存」清理。这里不直接清理。"
         }
         return nil
     }
@@ -100,48 +100,48 @@ struct SafetyPolicy: Sendable {
                 return nil
             }
             if name == "Blender" {
-                return "Blender 应用缓存；不含 .blend 工程和用户设置，重新打开时可能再生成。"
+                return "Blender 的应用缓存，不包含 .blend 工程和用户设置，下次打开时会重新生成。"
             }
             if name == "Homebrew" {
-                return "Homebrew 下载缓存；旧版本清理请先在 Homebrew 中预览，应用不会执行 brew cleanup。"
+                return "Homebrew 的下载缓存。如果要清理旧版本，请先在 Homebrew 里预览，本应用不会运行 brew cleanup。"
             }
-            return "应用缓存；下次使用时可能重新生成，清理前请退出对应应用。"
+            return "应用缓存，下次使用时会重新生成。清理前请先退出对应的应用。"
         }
         let appSupportCaches = home.appending(path: "Library/Application Support/Caches").path
         if CanonicalPath.url(url.deletingLastPathComponent()).path == appSupportCaches,
            name.hasSuffix("-updater") {
-            return "应用更新下载缓存；下次更新可能重新下载。"
+            return "应用更新时下载的安装包，下次更新时可能需要重新下载。"
         }
 
         let directCaches = [
-            (".cache/codex-runtimes", "Codex 运行时缓存；下次使用可能重新下载。"),
-            (".cache/uv", "uv 包缓存；下次安装依赖可能重新下载。"),
-            (".cache/pip", "pip 包缓存；下次安装依赖可能重新下载。"),
-            (".npm/_cacache", "npm 包缓存；下次安装依赖可能重新下载。"),
-            ("Library/Application Support/Codex/Cache", "Codex 界面缓存；请退出 Codex 后再处理。"),
-            ("Library/Application Support/Codex/Code Cache", "Codex 代码缓存；请退出 Codex 后再处理。"),
-            ("Library/Application Support/Adobe/Common/Media Cache Files", "Adobe 媒体缓存；请退出 Adobe 应用后再处理。"),
-            ("Library/Application Support/Adobe/Common/Media Cache", "Adobe 媒体缓存；请退出 Adobe 应用后再处理。"),
-            ("Library/Application Support/Adobe/Common/Peak Files", "Adobe 音频峰值缓存；请退出 Adobe 应用后再处理。"),
-            ("Library/Application Support/Notion/Partitions/notion/Cache", "Notion 浏览器缓存；请退出 Notion 后再处理。"),
-            ("Library/Application Support/Notion/Partitions/notion/Code Cache", "Notion 代码缓存；请退出 Notion 后再处理。")
+            (".cache/codex-runtimes", "Codex 的运行时缓存，下次使用时可能需要重新下载。"),
+            (".cache/uv", "uv 的包缓存，下次安装依赖时可能需要重新下载。"),
+            (".cache/pip", "pip 的包缓存，下次安装依赖时可能需要重新下载。"),
+            (".npm/_cacache", "npm 的包缓存，下次安装依赖时可能需要重新下载。"),
+            ("Library/Application Support/Codex/Cache", "Codex 的界面缓存。清理前请先退出 Codex。"),
+            ("Library/Application Support/Codex/Code Cache", "Codex 的代码缓存。清理前请先退出 Codex。"),
+            ("Library/Application Support/Adobe/Common/Media Cache Files", "Adobe 的媒体缓存。清理前请先退出 Adobe 的应用。"),
+            ("Library/Application Support/Adobe/Common/Media Cache", "Adobe 的媒体缓存。清理前请先退出 Adobe 的应用。"),
+            ("Library/Application Support/Adobe/Common/Peak Files", "Adobe 的音频峰值缓存。清理前请先退出 Adobe 的应用。"),
+            ("Library/Application Support/Notion/Partitions/notion/Cache", "Notion 的浏览器缓存。清理前请先退出 Notion。"),
+            ("Library/Application Support/Notion/Partitions/notion/Code Cache", "Notion 的代码缓存。清理前请先退出 Notion。")
         ]
         if let match = directCaches.first(where: { path == home.appending(path: $0.0).path }) {
             return match.1
         }
         if name.hasPrefix("Disk Cache"), path.contains("/Library/Caches/Adobe/After Effects/") {
-            return "After Effects 磁盘缓存；请退出 AE 后处理，也可在 AE 设置中清空缓存。"
+            return "After Effects 的磁盘缓存。清理前请先退出 AE，也可以在 AE 的设置里清空。"
         }
 
         // Build artifacts inside projects. The source and the project root stay untouched.
         if name == ".build", FileManager.default.fileExists(atPath: url.deletingLastPathComponent().appending(path: "Package.swift").path) {
-            return "Swift 构建产物；下次构建会重新生成。"
+            return "Swift 的构建产物，下次构建时会重新生成。"
         }
         if ["__pycache__", ".pytest_cache", ".mypy_cache"].contains(name) {
-            return "开发工具生成的缓存；运行时会重新生成。"
+            return "开发工具生成的缓存，运行时会重新生成。"
         }
         if name == "cache", url.deletingLastPathComponent().lastPathComponent == ".next" {
-            return "Next.js 构建缓存；下次构建会重新生成。"
+            return "Next.js 的构建缓存，下次构建时会重新生成。"
         }
         // Never infer that arbitrary folders named Cache inside a bundle are safe.
         if path.contains(".fcpbundle/") { return nil }

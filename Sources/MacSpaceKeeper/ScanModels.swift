@@ -1,11 +1,22 @@
 import Foundation
 
 enum ScanKind: String, Codable, Sendable {
+    // rawValue is persisted in saved results; change `label` for wording, not the cases.
     case cache = "可再生缓存"
     case project = "项目或资源库"
     case largeFile = "大文件"
     case review = "在原软件处理"
     case folder = "文件夹"
+
+    var label: String {
+        switch self {
+        case .cache: "可重新生成的缓存"
+        case .project: "项目或资源库"
+        case .largeFile: "大文件"
+        case .review: "需在原软件中处理"
+        case .folder: "文件夹"
+        }
+    }
 }
 
 enum ScanRisk: String, Codable, Sendable {

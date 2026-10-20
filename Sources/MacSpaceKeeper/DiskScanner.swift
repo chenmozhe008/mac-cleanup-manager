@@ -73,11 +73,11 @@ struct DiskScanner: Sendable {
 
         if !metadata.isDirectory {
             if policy.isProject(url), !insideProject, url != root, metadata.size >= minProjectBytes {
-                emit(&items, item(url, kind: .project, bytes: metadata.size, note: "工程文件；只提示占用，不提供删除操作。", canTrash: false, identity: metadata.identity))
+                emit(&items, item(url, kind: .project, bytes: metadata.size, note: "这是工程文件。这里只显示占用，不提供删除。", canTrash: false, identity: metadata.identity))
             } else if !insideProject, url != root,
                       metadata.size >= largeFileThreshold || (metadata.size >= 100_000_000 && ["dmg", "pkg"].contains(url.pathExtension.lowercased())) {
                 let installer = ["dmg", "pkg"].contains(url.pathExtension.lowercased())
-                let note = installer ? "安装包可能是旧版本，也可能是保留的交付资料；只提示占用，请在 Finder 中自行判断。" : "大文件仅提示；请在 Finder 中自行决定是否处理。"
+                let note = installer ? "安装包可能是旧版本，也可能是要留着的交付资料。这里只显示占用，请在访达里自己判断。" : "这是一个大文件。这里只显示占用，要不要处理请在访达里自己决定。"
                 emit(&items, item(url, kind: .largeFile, bytes: metadata.size, note: note, canTrash: false, identity: metadata.identity))
             }
             return metadata.size
@@ -109,7 +109,7 @@ struct DiskScanner: Sendable {
             if project, sum < minProjectBytes {
                 // Too small to be worth listing; still counted in the parent total.
             } else if project {
-                let note = url.lastPathComponent == "Figma" ? "Figma 本地数据可能包含未同步的离线改动；只显示占用，请在 Figma 内处理。" : "项目工程或应用数据；只显示占用，不提供删除操作。"
+                let note = url.lastPathComponent == "Figma" ? "Figma 的本地数据，可能包含还没同步的离线改动。这里只显示占用，请在 Figma 里处理。" : "项目工程或应用数据。这里只显示占用，不提供删除。"
                 emit(&items, item(url, kind: .project, bytes: sum, note: note, canTrash: false, identity: metadata.identity))
             } else if let reviewNote {
                 if url.path == policy.home.appending(path: "Library/Application Support/Shandianshuo/recordings").path {

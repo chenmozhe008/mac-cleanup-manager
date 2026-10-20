@@ -28,17 +28,17 @@ enum CreativeApp: String, CaseIterable, Sendable {
     /// One-line hint under the app name.
     var hint: String {
         switch self {
-        case .afterEffects: "先退出 AE 再清理；也可在 AE 里：编辑 → 清理 → 所有内存与磁盘缓存"
-        case .finalCut: "渲染文件在资源库里，只能在 Final Cut 里删"
-        case .davinci: "CacheClip 要在达芬奇里删"
-        case .blender: "先退出 Blender 再清理"
+        case .afterEffects: "清理前请先退出 After Effects"
+        case .finalCut: "渲染文件保存在资源库中，需要在 Final Cut 里删除"
+        case .davinci: "CacheClip 需要在达芬奇里删除"
+        case .blender: "清理前请先退出 Blender"
         }
     }
 
     /// Steps for items that must be cleaned inside the app.
     var inAppSteps: [String] {
         switch self {
-        case .finalCut: ["在侧栏选中资源库", "文件", "删除已生成的资源库文件…", "勾「删除渲染文件 · 仅未使用的」"]
+        case .finalCut: ["在侧栏选中资源库", "文件", "删除已生成的资源库文件…", "勾选「删除渲染文件」里的「仅未使用的」"]
         case .davinci: ["打开对应项目", "播放", "删除渲染缓存", "未使用的 / 全部"]
         default: []
         }
@@ -47,9 +47,9 @@ enum CreativeApp: String, CaseIterable, Sendable {
     /// Where this app keeps its caches (shown when nothing was found).
     var cacheWhere: String {
         switch self {
-        case .afterEffects: "磁盘缓存在 AE「设置 → 媒体和磁盘缓存」指定的文件夹；媒体缓存在 Adobe/Common 里"
-        case .finalCut: "渲染文件在每个资源库（.fcpbundle）里，外接盘上的资源库要扫那块盘"
-        case .davinci: "CacheClip 默认在 ~/Movies/CacheClip，也可能在项目设置里指定的位置"
+        case .afterEffects: "磁盘缓存在 AE「设置 → 媒体和磁盘缓存」里指定的文件夹，媒体缓存在 Adobe/Common 文件夹中"
+        case .finalCut: "渲染文件保存在各个资源库（.fcpbundle）中。资源库放在外接盘上的，需要扫描那块盘"
+        case .davinci: "CacheClip 默认在 ~/Movies/CacheClip，也可能在项目设置里指定的其他位置"
         case .blender: "~/Library/Caches/Blender"
         }
     }
@@ -57,10 +57,10 @@ enum CreativeApp: String, CaseIterable, Sendable {
     /// How to clean from inside the app.
     var cleanHow: String {
         switch self {
-        case .afterEffects: "AE 里：编辑 → 清理 → 所有内存与磁盘缓存"
-        case .finalCut: "Final Cut 里：选中资源库 → 文件 → 删除已生成的资源库文件"
-        case .davinci: "达芬奇里：播放 → 删除渲染缓存"
-        case .blender: "退出 Blender 后，这里扫到就能直接清"
+        case .afterEffects: "在 AE 中选择「编辑 → 清理 → 所有内存与磁盘缓存」"
+        case .finalCut: "在 Final Cut 中选中资源库，选择「文件 → 删除已生成的资源库文件」"
+        case .davinci: "在达芬奇中选择「播放 → 删除渲染缓存」"
+        case .blender: "退出 Blender 后，扫描到的缓存可以直接在这里清理"
         }
     }
 
@@ -95,17 +95,17 @@ enum ChatGuide {
     static func steps(for bundleID: String) -> [String] {
         switch bundleID {
         case "com.tencent.xinWeChat":
-            ["点微信左下角「≡」", "设置", "存储空间", "先点「清理缓存」：图片缩略图等临时文件，不影响聊天记录",
-             "再点「管理」：按聊天看谁占得多，勾选不要的视频、文件删除"]
+            ["点击微信左下角的「≡」", "选择「设置」", "打开「存储空间」", "先点「清理缓存」。清掉的是图片缩略图这类临时文件，不影响聊天记录",
+             "再点「管理」，按聊天查看哪个占得最多，勾选不需要的视频和文件删除"]
         default:
-            ["点企业微信左上角头像", "设置", "通用 → 存储空间", "先清理缓存：不影响聊天记录",
-             "再按聊天查看大文件，勾选不要的删除"]
+            ["点击企业微信左上角的头像", "选择「设置」", "打开「通用 → 存储空间」", "先清理缓存，不影响聊天记录",
+             "再按聊天查看大文件，勾选不需要的删除"]
         }
     }
 
     static let tips: [(symbol: String, tint: String, text: String)] = [
-        ("checkmark.circle.fill", "green", "缓存：清了会自动重新下载，不影响聊天记录，放心清"),
-        ("exclamationmark.circle.fill", "amber", "聊天里的视频、文件：删前确认已经另存，删了就没了"),
-        ("xmark.circle.fill", "pink", "聊天记录：想留的先在「设置 → 聊天记录备份」备份到手机或电脑")
+        ("checkmark.circle.fill", "green", "缓存：清理后会自动重新下载，不影响聊天记录，可以放心清"),
+        ("exclamationmark.circle.fill", "amber", "聊天里的视频和文件：删除后无法恢复，删之前请确认已经另存"),
+        ("xmark.circle.fill", "pink", "聊天记录：需要保留的，先在「设置 → 聊天记录备份」里备份到手机或电脑")
     ]
 }
