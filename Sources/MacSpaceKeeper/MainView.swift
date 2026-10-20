@@ -105,6 +105,8 @@ struct MainView: View {
                         Text(ByteFormat.string(capacity.free)).font(.system(size: 22, weight: .bold)).monospacedDigit()
                         Text("可用 / \(ByteFormat.string(capacity.total))").font(.system(size: 12)).foregroundStyle(Theme.ink3)
                     }
+                    .lineLimit(1)
+                    .fixedSize()
                     GlowBar(fraction: Double(capacity.total - capacity.free) / Double(capacity.total),
                             fill: low ? Theme.warning : Theme.accent, glow: low ? Theme.orange : Theme.cyan)
                         .frame(width: 260, height: 6)
