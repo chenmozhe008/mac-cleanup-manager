@@ -16,6 +16,7 @@ final class ScanStore: ObservableObject {
     @Published var isCleaning = false
     @Published var cleanedCount = 0
     @Published var filter: ItemFilter = .caches
+    @Published var hoveredID: URL?
 
     let policy = SafetyPolicy()
     private var scanID = UUID()
@@ -68,6 +69,12 @@ final class ScanStore: ObservableObject {
     func selectAllEligible() {
         guard !isCleaning else { return }
         selectedCleanupIDs = Set(eligibleItems.map(\.id))
+    }
+
+    /// Regenerable caches (risk A) need no app to be quit, so they are the safe one-click pick.
+    func selectReusable() {
+        guard !isCleaning else { return }
+        selectedCleanupIDs = Set(eligibleItems.filter { $0.risk == .a }.map(\.id))
     }
 
     func clearCleanupSelection() {

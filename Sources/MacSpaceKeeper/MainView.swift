@@ -33,6 +33,7 @@ struct MainView: View {
         .background(Backdrop())
         .ignoresSafeArea(.container, edges: .top)
         .preferredColorScheme(.dark)
+        .background(WindowDragEnabler())
         .sheet(isPresented: $store.showTrashConfirmation) { cleanupReviewSheet }
     }
 
@@ -181,7 +182,8 @@ struct MainView: View {
             sectionHeader("分类").padding(.top, 14)
             ForEach(ItemFilter.allCases) { category in
                 let items = store.items(in: category)
-                if category == .caches || !items.isEmpty {
+                // Folder totals only make sense for a full scan.
+                if category == .caches || (!items.isEmpty && !(category == .folders && store.result?.isQuickScan == true)) {
                     categoryRow(category, bytes: totalBytes(items))
                 }
             }
@@ -414,20 +416,28 @@ struct MainView: View {
 
     private func row(_ item: ScanItem, maxBytes: Int64) -> some View {
         let expanded = store.selectedID == item.id
+        let picked = store.selectedCleanupIDs.contains(item.id)
+        let hovered = store.hoveredID == item.id
+        let info = ItemPresentation.info(for: item)
+        let location = shortPath(item.url.deletingLastPathComponent())
+        let subtitle = info.title == item.name
+            ? "\(location) · \(tagText(item))"
+            : "\(item.name) · \(location) · \(tagText(item))"
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
                 checkbox(item)
+                itemIcon(item, image: info.icon)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(item.name)
+                    Text(info.title)
                         .font(.system(size: 13.5, weight: .medium))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    Text("\(shortPath(item.url.deletingLastPathComponent())) · \(tagText(item))")
+                    Text(subtitle)
                         .font(.system(size: 11.5))
                         .foregroundStyle(Theme.ink3)
                         .lineLimit(1)
-                        .truncationMode(.head)
+                        .truncationMode(.middle)
                 }
                 Spacer(minLength: 12)
                 GlowBar(fraction: Double(item.bytes) / Double(maxBytes))
@@ -436,6 +446,15 @@ struct MainView: View {
                     .font(.system(size: 13, weight: .medium))
                     .monospacedDigit()
                     .frame(width: 76, alignment: .trailing)
+                Button { toggleDetail(item) } label: {
+                    Image(systemName: expanded ? "chevron.up.circle.fill" : "info.circle")
+                        .font(.system(size: 15))
+                        .foregroundStyle(expanded ? Theme.cyan : (hovered ? Theme.ink2 : Theme.ink3))
+                        .frame(width: 26, height: 26)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(expanded ? "收起详情" : "查看详情")
             }
             if expanded {
                 VStack(alignment: .leading, spacing: 8) {
@@ -453,41 +472,97 @@ struct MainView: View {
                         Button("在 Finder 中显示") { reveal(item) }.buttonStyle(GhostButtonStyle())
                     }
                 }
-                .padding(.leading, 28)
+                .padding(.leading, 68)
                 .transition(.opacity)
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 11)
-        .background(expanded ? Theme.blue.opacity(0.12) : .clear)
+        .padding(.vertical, 10)
+        .background(rowBackground(picked: picked, expanded: expanded, hovered: hovered))
+        .overlay(alignment: .leading) {
+            if picked { Rectangle().fill(Theme.cyan).frame(width: 3).shadow(color: Theme.cyan, radius: 4) }
+        }
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.line).frame(height: 1) }
         .contentShape(Rectangle())
         .onTapGesture {
-            withAnimation(.easeOut(duration: 0.18)) { store.selectedID = expanded ? nil : item.id }
+            // Clicking anywhere on a cleanable row picks it; other rows open their details.
+            if item.canTrash {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) { store.setCleanupSelected(item, selected: !picked) }
+            } else {
+                toggleDetail(item)
+            }
         }
-        .contextMenu { Button("在 Finder 中显示") { reveal(item) } }
+        .onHover { inside in
+            if inside { store.hoveredID = item.id } else if store.hoveredID == item.id { store.hoveredID = nil }
+        }
+        .contextMenu {
+            if item.canTrash {
+                Button(picked ? "取消选择" : "选择") { store.setCleanupSelected(item, selected: !picked) }
+            }
+            Button(expanded ? "收起详情" : "查看详情") { toggleDetail(item) }
+            Button("在 Finder 中显示") { reveal(item) }
+        }
+    }
+
+    private func rowBackground(picked: Bool, expanded: Bool, hovered: Bool) -> Color {
+        if expanded { return Theme.blue.opacity(0.14) }
+        if picked { return Theme.cyan.opacity(hovered ? 0.12 : 0.08) }
+        return hovered ? Color.white.opacity(0.07) : .clear
+    }
+
+    private func toggleDetail(_ item: ScanItem) {
+        withAnimation(.easeOut(duration: 0.18)) { store.selectedID = store.selectedID == item.id ? nil : item.id }
+    }
+
+    @ViewBuilder
+    private func itemIcon(_ item: ScanItem, image: NSImage?) -> some View {
+        if let image {
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: 30, height: 30)
+        } else {
+            let tint = Theme.color(ItemFilter.allCases.first { $0.contains(item.kind) } ?? .caches)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(LinearGradient(colors: [tint.opacity(0.35), tint.opacity(0.12)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(tint.opacity(0.3)))
+                .overlay(Image(systemName: symbol(for: item.kind)).font(.system(size: 13, weight: .semibold)).foregroundStyle(tint))
+                .frame(width: 28, height: 28)
+                .padding(1)
+        }
+    }
+
+    private func symbol(for kind: ScanKind) -> String {
+        switch kind {
+        case .cache: "arrow.triangle.2.circlepath"
+        case .project: "film.stack"
+        case .largeFile: "doc.fill"
+        case .review: "hand.raised.fill"
+        case .folder: "folder.fill"
+        }
     }
 
     @ViewBuilder
     private func checkbox(_ item: ScanItem) -> some View {
         if item.canTrash {
             let on = store.selectedCleanupIDs.contains(item.id)
-            Button { store.setCleanupSelected(item, selected: !on) } label: {
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(on ? Theme.blue : .clear)
-                    .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(on ? .clear : Color(red: 0.24, green: 0.29, blue: 0.43), lineWidth: 1.5))
-                    .overlay { if on { Image(systemName: "checkmark").font(.system(size: 9, weight: .heavy)).foregroundStyle(.white) } }
-                    .frame(width: 16, height: 16)
-                    .shadow(color: on ? Theme.blue.opacity(0.6) : .clear, radius: 5)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(store.isCleaning)
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(on ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Color.clear))
+                .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(on ? .clear : Color(red: 0.3, green: 0.36, blue: 0.52), lineWidth: 1.5))
+                .overlay {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .heavy))
+                        .foregroundStyle(.white)
+                        .scaleEffect(on ? 1 : 0.3)
+                        .opacity(on ? 1 : 0)
+                }
+                .frame(width: 18, height: 18)
+                .shadow(color: on ? Theme.cyan.opacity(0.6) : .clear, radius: 5)
         } else {
             Image(systemName: "lock.fill")
                 .font(.system(size: 10))
                 .foregroundStyle(Theme.ink3)
-                .frame(width: 16, height: 16)
+                .frame(width: 18, height: 18)
                 .help("仅提示，不在这里清理")
         }
     }
@@ -495,23 +570,38 @@ struct MainView: View {
     private var footer: some View {
         let allSelected = store.selectedCleanupIDs.count == store.eligibleItems.count
         let empty = store.selectedCleanupItems.isEmpty
-        return HStack(spacing: 14) {
+        let needsQuit = store.selectedCleanupItems.filter { $0.risk == .b }
+        return HStack(spacing: 10) {
             Button(allSelected ? "取消全选" : "全选") {
-                allSelected ? store.clearCleanupSelection() : store.selectAllEligible()
+                withAnimation(.easeOut(duration: 0.15)) { allSelected ? store.clearCleanupSelection() : store.selectAllEligible() }
             }
-            .buttonStyle(GhostButtonStyle())
-            .disabled(store.isCleaning)
+            .keyboardShortcut("a", modifiers: .command)
+            Button("只选可再生") {
+                withAnimation(.easeOut(duration: 0.15)) { store.selectReusable() }
+            }
+            .help("uv、npm、Codex 运行时这类缓存：不用退出任何应用，下次用时自动重新下载")
+            Rectangle().fill(Theme.line).frame(width: 1, height: 22).padding(.horizontal, 4)
             if store.isCleaning {
                 ProgressView().controlSize(.small)
                 Text("正在移入废纸篓 \(store.cleanedCount)/\(store.selectedCleanupItems.count)")
                     .monospacedDigit()
             } else {
-                Text("已选 \(store.selectedCleanupItems.count) 项 · \(ByteFormat.string(store.selectedCleanupBytes))")
-                    .font(.system(size: 16, weight: .semibold))
-                    .monospacedDigit()
-                Text("清空废纸篓后才会释放空间")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.ink3)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(empty ? "点任意一行即可选中" : "已选 \(store.selectedCleanupItems.count) 项 · \(ByteFormat.string(store.selectedCleanupBytes))")
+                        .font(.system(size: empty ? 13 : 15, weight: .semibold))
+                        .foregroundStyle(empty ? Theme.ink2 : Theme.ink)
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                    if !needsQuit.isEmpty {
+                        Text("含 \(needsQuit.count) 个应用缓存，先退出对应应用再清理")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.amber)
+                    } else if !empty {
+                        Text("都是可再生缓存，可直接清理")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.ink3)
+                    }
+                }
             }
             Spacer()
             Button("移入废纸篓…") { store.showTrashConfirmation = true }
@@ -519,8 +609,10 @@ struct MainView: View {
                 .disabled(empty || store.isCleaning)
                 .opacity(empty || store.isCleaning ? 0.4 : 1)
         }
+        .buttonStyle(GhostButtonStyle())
+        .disabled(store.isCleaning)
         .padding(.horizontal, 28)
-        .padding(.vertical, 14)
+        .padding(.vertical, 12)
     }
 
     private func cleanupReportBanner(_ report: CleanupReport) -> some View {
@@ -636,40 +728,83 @@ struct MainView: View {
     }
 
     private var cleanupReviewSheet: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("确认处理所选缓存")
-                .font(.title2.bold())
-            Text("共 \(store.selectedCleanupItems.count) 项，约 \(ByteFormat.string(store.selectedCleanupBytes))。请核对路径；工程和大文件不会进入此清单。")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            List(store.selectedCleanupItems) { item in
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text(item.name).fontWeight(.semibold)
-                        Spacer()
-                        Text(ByteFormat.string(item.bytes)).monospacedDigit()
-                    }
-                    Text(item.url.path)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
+        let items = store.selectedCleanupItems
+        let needsQuit = items.filter { $0.risk == .b }
+        let appNames = Array(Set(needsQuit.map { ItemPresentation.info(for: $0).title })).sorted().prefix(4)
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 14) {
+                Image(systemName: "trash.circle.fill")
+                    .font(.system(size: 38))
+                    .foregroundStyle(Theme.accent)
+                    .shadow(color: Theme.cyan.opacity(0.5), radius: 10)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("移入废纸篓").font(.system(size: 20, weight: .bold))
+                    Text("共 \(items.count) 项 · \(ByteFormat.string(store.selectedCleanupBytes))，随时可以从废纸篓恢复")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.ink2)
                 }
-                .padding(.vertical, 4)
             }
-            Text("操作只会移入 macOS 废纸篓。你可以在那里恢复，应用不会自动清空。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            if !needsQuit.isEmpty {
+                Label("其中 \(needsQuit.count) 项是应用缓存，请先退出：\(appNames.joined(separator: "、"))\(needsQuit.count > appNames.count ? " 等" : "")",
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.amber)
+            }
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(items) { item in
+                        let info = ItemPresentation.info(for: item)
+                        HStack(spacing: 10) {
+                            itemIcon(item, image: info.icon).scaleEffect(0.8)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(info.title).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                                Text(shortPath(item.url))
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundStyle(Theme.ink3)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                    .textSelection(.enabled)
+                            }
+                            Spacer(minLength: 8)
+                            Text(ByteFormat.string(item.bytes)).font(.system(size: 13, weight: .medium)).monospacedDigit()
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .overlay(alignment: .bottom) { Rectangle().fill(Theme.line).frame(height: 1) }
+                    }
+                }
+            }
+            .glass(radius: 12)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             HStack {
+                Text("应用不会清空废纸篓，真正释放空间由你决定。")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.ink3)
                 Spacer()
-                Button("返回选择") { store.showTrashConfirmation = false }
+                Button("返回") { store.showTrashConfirmation = false }
+                    .buttonStyle(GhostButtonStyle())
                     .keyboardShortcut(.cancelAction)
                 Button("确认移入废纸篓") { store.trashSelectedItems() }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(store.selectedCleanupItems.isEmpty)
+                    .buttonStyle(CTAButtonStyle())
+                    .disabled(items.isEmpty)
                     .keyboardShortcut(.defaultAction)
             }
         }
         .padding(24)
-        .frame(width: 640, height: 460)
+        .frame(width: 620, height: 480)
+        .foregroundStyle(Theme.ink)
+        .background(Backdrop())
+        .preferredColorScheme(.dark)
     }
+}
+
+/// Lets the borderless-looking window be dragged from any empty background area.
+struct WindowDragEnabler: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { view.window?.isMovableByWindowBackground = true }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
 }
