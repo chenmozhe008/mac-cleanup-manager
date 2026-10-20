@@ -5,7 +5,8 @@
 ## 版本与发布
 
 - 版本号写在 `script/build_and_run.sh` 的 `APP_VERSION`，构建号取 git 提交数；改版本时同步在 `CHANGELOG.md` 顶部加一节（App「关于」页直接读这个文件，别另写一份）
-- 作者 @沉默者之二、反馈邮箱在 `AboutView.swift` 的 `AppInfo`
+- 作者 @沉默者之二、反馈邮箱在 `AboutView.swift` 的 `AppInfo`；「关于」三页（介绍 / 更新记录 / 反馈），竞品对比数据在 `Comparison`（2026-10-21 查官网与评测，查不到写「官网未提及」，别凭印象补）
+- 磁盘可用空间一律**实时读** `volumeAvailableCapacityForImportantUsage`（与访达一致），不用扫描时存下的数
 - GitHub 私有仓库：chenmozhe008/mac-cleanup-manager
 
 ## 构建与安装

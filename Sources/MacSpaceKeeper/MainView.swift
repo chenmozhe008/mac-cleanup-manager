@@ -38,7 +38,12 @@ struct MainView: View {
         .preferredColorScheme(.dark)
         .background(WindowDragEnabler())
         .sheet(isPresented: $store.showTrashConfirmation) { cleanupReviewSheet }
-        .sheet(isPresented: $store.showAbout) { AboutView(store: store) }
+        .overlay {
+            if store.showAbout {
+                AboutView(store: store).transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.18), value: store.showAbout)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             store.refreshFullDiskAccess()
         }
@@ -109,12 +114,10 @@ struct MainView: View {
             }
             .frame(maxWidth: 900)
             .padding(.horizontal, 40)
-            Button { store.showAbout = true } label: {
-                Text("v\(AppInfo.version) · \(AppInfo.author) · 关于与反馈")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Theme.ink3)
+            Button { store.aboutTab = .intro; store.showAbout = true } label: {
+                Label("关于与反馈 · v\(AppInfo.version)", systemImage: "info.circle")
             }
-            .buttonStyle(.plain)
+            .buttonStyle(GhostButtonStyle())
             .padding(.top, 16)
             .padding(.bottom, 20)
         }
@@ -393,20 +396,25 @@ struct MainView: View {
             }
             Spacer(minLength: 12)
             permissionCard
-            Button { store.showAbout = true } label: {
-                HStack(spacing: 6) {
-                    Text("v\(AppInfo.version) · \(AppInfo.author)").lineLimit(1).fixedSize()
+            Button { store.aboutTab = .intro; store.showAbout = true } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "info.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.cyan)
+                        .frame(width: 18)
+                    Text("关于与反馈").font(.system(size: 13.5))
                     Spacer(minLength: 4)
-                    Text("关于")
-                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
+                    Text("v\(AppInfo.version)").font(.system(size: 11.5)).foregroundStyle(Theme.ink3)
                 }
-                .font(.system(size: 11.5))
-                .foregroundStyle(Theme.ink3)
-                .padding(.horizontal, 8)
-                .padding(.top, 8)
+                .foregroundStyle(Theme.ink)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 9)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.05)))
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.line))
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .padding(.top, 6)
         }
         .padding(.top, 44)
         .padding(.horizontal, 10)
@@ -550,7 +558,11 @@ struct MainView: View {
             } else {
                 VStack(spacing: 14) {
                     HStack(spacing: 24) {
-                        ring(result).frame(width: 184, height: 184)
+                        // Free space is read live (scan results go stale as soon as anything is deleted).
+                        TimelineView(.periodic(from: .now, by: 30)) { _ in
+                            ring(result)
+                        }
+                        .frame(width: 184, height: 184)
                         statsGrid(result)
                     }
                     .padding(.top, 18)
@@ -592,9 +604,10 @@ struct MainView: View {
     }
 
     private func ring(_ result: ScanResult) -> some View {
-        let totalBytes = result.volumeTotalBytes ?? 0
+        let live = volumeCapacity(result.root)
+        let totalBytes = live?.total ?? result.volumeTotalBytes ?? 0
         let total = Double(max(totalBytes, 1))
-        let free = result.volumeFreeBytes ?? 0
+        let free = live?.free ?? result.volumeFreeBytes ?? 0
         let used = Double(max(totalBytes - free, 0))
         let caches = Double(ScanStore.sum(store.items(in: .caches)))
         let creative = Double(ScanStore.sum(store.items(in: .creative)))
@@ -1488,11 +1501,12 @@ struct MainView: View {
         (try? url.resourceValues(forKeys: [.volumeLocalizedNameKey]).volumeLocalizedName) ?? "磁盘"
     }
 
+    /// Same "available" figure Finder shows (includes space macOS can purge on demand).
     private func volumeCapacity(_ url: URL) -> (total: Int64, free: Int64)? {
-        guard let data = try? FileManager.default.attributesOfFileSystem(forPath: url.path),
-              let total = (data[.systemSize] as? NSNumber)?.int64Value,
-              let free = (data[.systemFreeSize] as? NSNumber)?.int64Value else { return nil }
-        return (total, free)
+        guard let values = try? url.resourceValues(forKeys: [.volumeTotalCapacityKey, .volumeAvailableCapacityForImportantUsageKey]),
+              let total = values.volumeTotalCapacity,
+              let free = values.volumeAvailableCapacityForImportantUsage else { return nil }
+        return (Int64(total), free)
     }
 
     private var otherVolumes: [URL] {
