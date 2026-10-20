@@ -868,7 +868,7 @@ struct MainView: View {
                         Text("已选 \(pickedCount)").font(.system(size: 11.5)).foregroundStyle(Theme.cyan)
                     }
                 }
-                Text("\(first.name) · \(common == store.policy.home.path || common == "/" ? "分散在 \(Set(parents).count) 个文件夹" : "都在 \(shortPath(URL(fileURLWithPath: common))) 里") · \(tagText(first))")
+                Text("\(first.name) · \(groupLocation(parents: parents, common: common)) · \(tagText(first))")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.ink3)
                     .lineLimit(1)
@@ -915,6 +915,20 @@ struct MainView: View {
             }
             Button(expanded ? "收起" : "展开看每一处", action: toggleExpanded)
         }
+    }
+
+    /// "都在 ~/Coding 里" when one folder holds them all, otherwise the top folders holding the most.
+    private func groupLocation(parents: [String], common: String) -> String {
+        guard common == store.policy.home.path || common == "/" else {
+            return "都在 \(shortPath(URL(fileURLWithPath: common))) 里"
+        }
+        var counts: [String: Int] = [:]
+        for path in parents {
+            let rest = path.dropFirst(common.count).split(separator: "/")
+            if let top = rest.first { counts[String(top), default: 0] += 1 }
+        }
+        let tops = counts.sorted { $0.value > $1.value }.prefix(2).map { shortPath(URL(fileURLWithPath: common).appending(path: $0.key)) }
+        return "主要在 \(tops.joined(separator: "、"))\(counts.count > 2 ? " 等处" : " 里")"
     }
 
     private func rowBackground(picked: Bool, expanded: Bool, hovered: Bool) -> Color {
