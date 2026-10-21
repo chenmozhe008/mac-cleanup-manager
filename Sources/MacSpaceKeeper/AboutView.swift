@@ -82,7 +82,7 @@ private enum Comparison {
     static let rows: [(title: String, cells: [Cell])] = [
         ("价格", [c(.good, "免费"), c(.partial, "订阅，约 $39.95/年起"), c(.good, "免费，开源"), c(.partial, "买断约 $20–30"), c(.partial, "$9.99 买断")]),
         ("删错了能找回", [c(.good, "放进废纸篓，随时找回"), c(.none, "一键清理"), c(.none, "一键清理"), c(.none, "一键清理"), c(.bad, "直接永久删除")]),
-        ("创作与 AI 工具", [c(.good, "识别 \(CreativeApp.allCases.count) 款，缓存可清、作品只读"), c(.none, "—"), c(.none, "—"), c(.none, "—"), c(.bad, "不区分")]),
+        ("AI Coding 与影视工具", [c(.good, "认得主流工具，缓存可清、作品只读"), c(.none, "—"), c(.none, "—"), c(.none, "—"), c(.bad, "不区分")]),
         ("微信 / 企业微信", [c(.good, "看占用，教你在微信里清"), c(.none, "—"), c(.good, "扫描并清理聊天文件"), c(.none, "—"), c(.partial, "只显示文件夹大小")]),
         ("每一项说得清", [c(.good, "中文名、能不能删、为什么"), c(.partial, "按类别汇总"), c(.partial, "按类别汇总"), c(.partial, "按类别汇总"), c(.bad, "只有文件夹名")])
     ]
@@ -131,7 +131,7 @@ struct AboutView: View {
             SidebarBrandMark()
             VStack(alignment: .leading, spacing: 6) {
                 Text("关于 Mac 清理管家").font(.system(size: 22, weight: .bold))
-                Text("v\(AppInfo.version) · 作者 \(AppInfo.author) · 为 AI 编程和影视创作整理磁盘空间")
+                Text("v\(AppInfo.version) · 作者 \(AppInfo.author) · AI 时代的 Mac 空间清理工具")
                     .font(.system(size: 13)).foregroundStyle(Theme.ink2)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -170,21 +170,21 @@ struct AboutView: View {
 
     // MARK: Intro
 
-    /// Order the user asked for: what it is → the two strengths → comparison.
+    /// Order the user asked for: what it is → strengths (AI first, film as the bonus) → comparison.
     private var intro: some View {
         VStack(alignment: .leading, spacing: 28) {
             HStack(alignment: .center, spacing: 24) {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("给 AI 编程和影视创作的人")
+                    Text("为什么做它")
                         .font(.system(size: 13, weight: .semibold)).tracking(1.5)
                         .foregroundStyle(Color.white.opacity(0.85))
-                    Text("留住作品，\n腾出创作空间。")
+                    Text("传统清理工具，\n不认识你的 AI 工具。")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
                         .lineSpacing(4).foregroundStyle(.white)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("扫一遍就知道空间花在哪：AI 工具的运行缓存、剪辑软件的渲染缓存、微信占了多少，一眼看清。")
+                    Text("Cursor、Claude Code、WorkBuddy 这些 AI 工具，每天在电脑里留下运行时、模型和缓存，动不动就是几个 GB。传统清理工具大多不认识它们，分不清哪些是能重新生成的缓存，哪些是你的对话和工作区。Mac 清理管家认得它们，该清的清，该留的留。")
                         .font(.system(size: 14)).foregroundStyle(Color.white.opacity(0.92))
-                        .lineSpacing(3)
+                        .lineSpacing(4)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
@@ -206,17 +206,20 @@ struct AboutView: View {
             .background(LinearGradient(colors: [Color(red: 0.08, green: 0.24, blue: 0.57), Color(red: 0.15, green: 0.19, blue: 0.40)], startPoint: .topLeading, endPoint: .bottomTrailing))
             .clipShape(RoundedRectangle(cornerRadius: 16))
 
-            VStack(alignment: .leading, spacing: 14) {
-                Text("最大的两个优点").font(.system(size: 18, weight: .bold))
-                HStack(alignment: .top, spacing: 16) {
-                    advantage("1", "懂 AI 编程和影视创作", "chevron.left.forwardslash.chevron.right", Theme.blue,
-                              "认得 \(CreativeApp.allCases.count) 款国内外工具，知道哪些是能清的缓存，哪些是你的工程、草稿和对话。缓存帮你清，作品一个不碰。",
-                              ["Cursor", "Claude Code", "Codex", "Trae", "剪映", "达芬奇", "AE", "ComfyUI"])
-                    advantage("2", "先确认，再清理", "checkmark.shield.fill", Theme.green,
-                              "每一项都写明是什么、能不能删。你勾选确认后才放进废纸篓，删错了随时拖回来；正在用的文件会自动跳过。",
-                              ["逐项确认", "进废纸篓可找回", "正在用的不动"])
-                }
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 12) {
+                Text("它的优势").font(.system(size: 18, weight: .bold))
+                advantage("懂 AI Coding", nil, "chevron.left.forwardslash.chevron.right", Theme.blue,
+                          "认得 Cursor、Claude Code、Codex、WorkBuddy、CodeBuddy、Trae、Qoder 等主流 AI Coding 和智能体工具，也认得 Ollama、LM Studio 等本地模型。",
+                          clean: "运行时、下载包、界面缓存，删了会自动重新生成",
+                          keep: "对话记录、工作区、扩展和模型，只统计、不删除")
+                advantage("也懂影视创作", nil, "film.stack.fill", Theme.pink,
+                          "认得剪映、达芬奇、After Effects、Premiere、Final Cut、Blender 等主流剪辑和设计软件。",
+                          clean: "剪映缓存、AE 磁盘缓存、Adobe 媒体缓存可以直接清；达芬奇、Final Cut 的渲染缓存，告诉你在软件里怎么清",
+                          keep: "工程、草稿和素材，一个不碰")
+                advantage("先确认，再清理", nil, "checkmark.shield.fill", Theme.green,
+                          "每一项都写明是什么、能不能删、为什么。",
+                          clean: "你勾选确认后才放进废纸篓，删错了随时拖回来",
+                          keep: "正在使用的文件自动跳过，也不会替你清空废纸篓")
             }
 
             VStack(alignment: .leading, spacing: 14) {
@@ -232,29 +235,42 @@ struct AboutView: View {
         }
     }
 
-    private func advantage(_ number: String, _ title: String, _ symbol: String, _ tint: Color, _ description: String, _ tags: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                IconTile(symbol: symbol, tint: tint, size: 36)
-                Text(title).font(.system(size: 18, weight: .bold))
-            }
-            Text(description)
-                .font(.system(size: 14)).foregroundStyle(Theme.ink2)
-                .lineSpacing(4).fixedSize(horizontal: false, vertical: true)
-            FlowLayout(spacing: 6) {
-                ForEach(tags, id: \.self) { tag in
-                    Text(tag)
-                        .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(tint)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(tint.opacity(0.1)))
+    /// One strength: what it knows, then the two-line rule (what gets cleaned / what is kept).
+    private func advantage(_ title: String, _ badge: String?, _ symbol: String, _ tint: Color, _ description: String,
+                           clean: String, keep: String) -> some View {
+        HStack(alignment: .top, spacing: 16) {
+            IconTile(symbol: symbol, tint: tint, size: 40)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Text(title).font(.system(size: 17, weight: .bold))
+                    if let badge {
+                        Text(badge)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(tint)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(tint.opacity(0.12)))
+                    }
+                }
+                Text(description)
+                    .font(.system(size: 14)).foregroundStyle(Theme.ink2)
+                    .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 6) {
+                    ruleLine("checkmark.circle.fill", Theme.green, clean)
+                    ruleLine("lock.fill", Theme.amber, keep)
                 }
             }
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .glass(radius: 14)
+    }
+
+    private func ruleLine(_ symbol: String, _ tint: Color, _ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: symbol).font(.system(size: 13)).foregroundStyle(tint).frame(width: 16)
+            Text(text).font(.system(size: 13.5)).fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private var comparisonTable: some View {

@@ -10,7 +10,7 @@ struct CreativeApp: Hashable, Sendable, Identifiable {
         case design = "设计与三维"
         case aiCreate = "AI 生图与视频"
         case aiChat = "AI 助手"
-        case aiCode = "AI 编程与智能体"
+        case aiCode = "AI Coding 与智能体"
         case localModel = "本地模型"
 
         var symbol: String {
@@ -149,7 +149,7 @@ struct CreativeApp: Hashable, Sendable, Identifiable {
     static let cherryStudio = CreativeApp("cherry", "Cherry Studio", .aiChat, apps: ["Cherry Studio"], folders: ["Cherry Studio", "CherryStudio"])
     static let chatbox = CreativeApp("chatbox", "Chatbox", .aiChat, apps: ["xyz.chatboxapp.app", "Chatbox"], folders: ["xyz.chatboxapp.app", "Chatbox"])
 
-    // AI 编程与智能体
+    // AI Coding 与智能体
     static let cursor = CreativeApp("cursor", "Cursor", .aiCode, apps: ["Cursor"], folders: ["Cursor"], roots: [".cursor"])
     static let windsurf = CreativeApp("windsurf", "Windsurf", .aiCode, apps: ["Windsurf"], folders: ["Windsurf"], roots: [".windsurf", ".codeium"])
     static let trae = CreativeApp("trae", "Trae", .aiCode, apps: ["Trae"], folders: ["Trae", "Trae CN"], roots: [".trae", ".trae-cn"])

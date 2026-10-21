@@ -1216,7 +1216,7 @@ struct MainView: View {
                 }
             } label: {
                 HStack {
-                    Text("能识别的 \(CreativeApp.allCases.count) 款工具").font(.system(size: 13, weight: .semibold))
+                    Text("能识别的工具").font(.system(size: 13, weight: .semibold))
                     Spacer()
                     Image(systemName: expanded ? "chevron.up" : "chevron.down").font(.system(size: 11, weight: .semibold))
                 }
