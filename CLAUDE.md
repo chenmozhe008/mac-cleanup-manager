@@ -14,7 +14,8 @@
 - 背景 `Backdrop` 是柔和的 MeshGradient 色场（macOS 15+），液态玻璃要有东西可折射才看得出来，别换回纯色
 - 子页「返回总览」用蓝色 tinted 按钮（`ToolbarButtonStyle(tinted:)`），别做成灰的
 - 磁盘可用空间一律**实时读** `volumeAvailableCapacityForImportantUsage`（与访达一致），不用扫描时存下的数
-- GitHub 私有仓库：chenmozhe008/mac-cleanup-manager
+- GitHub **公开仓库**（MIT，2026-10-21 开源）：chenmozhe008/mac-cleanup-manager。仓库里不放密钥、个人路径和个人配置；`SafetyPolicy` 的保护名单只写通用目录。README 面向公众，内部约定写本文件
+- 文案风格（2026-10-21 用户定，参照 Apple）：一行只说一件事，**不用「·」串信息**；不写「点击这里可以…」这类多余提示；竞品只写查证过的事实
 
 ## 构建与安装
 

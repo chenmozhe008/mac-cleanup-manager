@@ -4,6 +4,8 @@ import SwiftUI
 enum AppInfo {
     static let author = "@沉默者之二"
     static let feedbackEmail = "327529709@qq.com"
+    static let repository = URL(string: "https://github.com/chenmozhe008/mac-cleanup-manager")!
+    static let issues = URL(string: "https://github.com/chenmozhe008/mac-cleanup-manager/issues")!
 
     static var version: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "开发版"
@@ -82,7 +84,8 @@ private enum Comparison {
     static let rows: [(title: String, cells: [Cell])] = [
         ("价格", [c(.good, "免费"), c(.partial, "订阅，约 $39.95/年起"), c(.good, "免费，开源"), c(.partial, "买断约 $20–30"), c(.partial, "$9.99 买断")]),
         ("删错了能找回", [c(.good, "放进废纸篓，随时找回"), c(.none, "一键清理"), c(.none, "一键清理"), c(.none, "一键清理"), c(.bad, "直接永久删除")]),
-        ("AI Coding 与影视工具", [c(.good, "认得主流工具，缓存可清、作品只读"), c(.none, "—"), c(.none, "—"), c(.none, "—"), c(.bad, "不区分")]),
+        ("AI Coding 与影视工具", [c(.good, "按工具区分缓存和作品"), c(.none, "通用应用缓存、Xcode 垃圾"), c(.none, "—"), c(.none, "应用缓存，含 Final Cut、Adobe"), c(.bad, "不区分")]),
+        ("代码开源", [c(.good, "MIT 开源"), c(.bad, "闭源"), c(.good, "开源"), c(.bad, "闭源"), c(.bad, "闭源")]),
         ("微信 / 企业微信", [c(.good, "看占用，教你在微信里清"), c(.none, "—"), c(.good, "扫描并清理聊天文件"), c(.none, "—"), c(.partial, "只显示文件夹大小")]),
         ("每一项说得清", [c(.good, "中文名、能不能删、为什么"), c(.partial, "按类别汇总"), c(.partial, "按类别汇总"), c(.partial, "按类别汇总"), c(.bad, "只有文件夹名")])
     ]
@@ -131,8 +134,16 @@ struct AboutView: View {
             SidebarBrandMark(size: 60)
             VStack(alignment: .leading, spacing: 5) {
                 Text("Mac 清理管家").font(.system(size: 24, weight: .bold))
-                Text("v\(AppInfo.version) · 作者 \(AppInfo.author)")
-                    .font(.system(size: 12.5)).foregroundStyle(Theme.ink3)
+                HStack(spacing: 14) {
+                    Text("v\(AppInfo.version)").font(.system(size: 12.5, weight: .medium)).foregroundStyle(Theme.ink2)
+                    Text("作者 \(AppInfo.author)").font(.system(size: 12.5)).foregroundStyle(Theme.ink3)
+                    Button { NSWorkspace.shared.open(AppInfo.repository) } label: {
+                        Label("GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .buttonStyle(ToolbarButtonStyle(tinted: true))
+                    .help(AppInfo.repository.absoluteString)
+                }
             }
             Spacer(minLength: 8)
             Button { store.showAbout = false } label: {
@@ -202,6 +213,10 @@ struct AboutView: View {
                           "每一项都写明是什么、能不能删、为什么。",
                           clean: "你勾选确认后才放进废纸篓，删错了随时拖回来",
                           keep: "正在使用的文件自动跳过，也不会替你清空废纸篓")
+                advantage("代码开源，跟得上新工具", nil, "lock.open.fill", Theme.violet,
+                          "全部代码在 GitHub 公开。哪些会清、哪些不碰，规则都写在代码里，谁都能查。AI 工具更新快，识别清单集中在一个文件里，新工具出来很快就能加上，你也可以自己提交。",
+                          clean: "MIT 许可证，免费使用",
+                          keep: "不联网、不上传，扫描结果只留在你的 Mac 上")
             }
 
             VStack(alignment: .leading, spacing: 14) {
@@ -391,6 +406,8 @@ struct AboutView: View {
                 Button { AppInfo.sendFeedback() } label: { Label("发反馈邮件", systemImage: "envelope.fill") }
                     .buttonStyle(ToolbarButtonStyle(prominent: true))
                 let emailCopied = store.copiedText == AppInfo.feedbackEmail
+                Button { NSWorkspace.shared.open(AppInfo.issues) } label: { Label("在 GitHub 提问题", systemImage: "exclamationmark.bubble") }
+                    .buttonStyle(ToolbarButtonStyle())
                 Button { store.copy(AppInfo.feedbackEmail) } label: {
                     Label(emailCopied ? "已复制邮箱" : AppInfo.feedbackEmail, systemImage: emailCopied ? "checkmark" : "doc.on.doc")
                         .foregroundStyle(emailCopied ? Theme.green : Theme.ink)

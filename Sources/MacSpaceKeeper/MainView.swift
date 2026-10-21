@@ -111,13 +111,13 @@ struct MainView: View {
             HStack(spacing: 16) {
                 diskCard(home, name: "Mac 内置盘", icon: "laptopcomputer")
                 ForEach(otherVolumes, id: \.self) { volume in
-                    diskCard(volume, name: "\(volume.lastPathComponent) · 外接", icon: "externaldrive.fill")
+                    diskCard(volume, name: volume.lastPathComponent, icon: "externaldrive.fill")
                 }
             }
             .frame(maxWidth: 900)
             .padding(.horizontal, 40)
             Button { store.aboutTab = .intro; store.showAbout = true } label: {
-                Label("关于与反馈 · v\(AppInfo.version)", systemImage: "info.circle")
+                Label("关于与反馈", systemImage: "info.circle")
             }
             .buttonStyle(GhostButtonStyle())
             .padding(.top, 16)
@@ -179,7 +179,7 @@ struct MainView: View {
             Text(store.notScannedTitle)
                 .font(.system(size: 24, weight: .bold))
                 .padding(.top, 24)
-            Text(quick ? "只检查常见的缓存位置，几秒钟就能完成。" : shortPath(store.root) + " · 可能需要几分钟，只读取，不改动。")
+            Text(quick ? "只检查常见的缓存位置，几秒钟就能完成。" : "可能需要几分钟。扫描只读取，不改动任何文件。")
                 .font(.system(size: 13.5))
                 .foregroundStyle(Theme.ink2)
                 .padding(.top, 8)
@@ -197,35 +197,39 @@ struct MainView: View {
     private var scanningView: some View {
         HStack(spacing: 48) {
             VStack(spacing: 0) {
+                // Same dial as the overview; a band of lit ticks sweeps round while scanning.
                 ZStack {
-                    Circle().stroke(Theme.fill(0.06), lineWidth: 3)
-                    TimelineView(.animation) { context in
-                        Circle()
-                            .trim(from: 0, to: 0.22)
-                            .stroke(Theme.accent, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                            .shadow(color: Theme.cyan.opacity(0.9), radius: 8)
-                            .rotationEffect(.degrees(context.date.timeIntervalSinceReferenceDate * 200))
+                    TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
+                        let angle = context.date.timeIntervalSinceReferenceDate * 150
+                        ZStack {
+                            Ticks(count: 72, range: 0..<72, length: 26, width: 5).fill(Theme.fill(0.1))
+                            Ticks(count: 72, range: 0..<72, length: 26, width: 5)
+                                .fill(AngularGradient(colors: [.clear, .clear, Theme.indigo.opacity(0.6), Theme.blue, Theme.cyan], center: .center))
+                                .rotationEffect(.degrees(angle))
+                                .shadow(color: Theme.blue.opacity(0.45), radius: 8)
+                        }
                     }
-                    Circle()
-                        .fill(RadialGradient(colors: [Color(red: 0.5, green: 0.69, blue: 1.0), Color(red: 0.23, green: 0.43, blue: 1.0), Color(red: 0.36, green: 0.24, blue: 0.96)],
-                                             center: UnitPoint(x: 0.35, y: 0.3), startRadius: 0, endRadius: 130))
-                        .background(Circle().fill(Theme.blue.opacity(0.10)).padding(-14))
-                        .background(Circle().fill(Theme.blue.opacity(0.05)).padding(-30))
-                        .shadow(color: Theme.blue.opacity(0.8), radius: 36, y: 18)
-                        .padding(60)
+                    Group {
+                        if #available(macOS 26.0, *) {
+                            Circle().fill(Color.clear).glassEffect(.regular, in: Circle())
+                        } else {
+                            Circle().fill(Theme.panel)
+                        }
+                    }
+                    .padding(44)
                     VStack(spacing: 4) {
                         Text(store.progress.scannedCount.formatted())
-                            .font(.system(size: 32, weight: .bold))
+                            .font(.system(size: 34, weight: .bold, design: .rounded))
                             .monospacedDigit()
                             .contentTransition(.numericText())
-                        Text("项已检查").font(.system(size: 13)).foregroundStyle(.white.opacity(0.85))
+                        Text("项已检查").font(.system(size: 13)).foregroundStyle(Theme.ink2)
                     }
                 }
                 .frame(width: 290, height: 290)
                 Text(store.scanningTitle)
                     .font(.system(size: 22, weight: .semibold))
                     .padding(.top, 24)
-                Text(store.progress.currentFolder.replacingOccurrences(of: home.path, with: "~"))
+                Text(scanningPlace(store.progress.currentFolder))
                     .font(.system(size: 12.5))
                     .foregroundStyle(Theme.ink3)
                     .lineLimit(1)
@@ -235,9 +239,10 @@ struct MainView: View {
                 scanProgressBar
                     .frame(width: 300, height: 6)
                     .padding(.top, 18)
-                Button("停止扫描") { store.cancelScan() }
-                    .buttonStyle(GhostButtonStyle())
-                    .padding(.top, 22)
+                Button { store.cancelScan() } label: { Label("停止扫描", systemImage: "stop.circle.fill") }
+                    .buttonStyle(ToolbarButtonStyle(large: true, tinted: true))
+                    .keyboardShortcut(.cancelAction)
+                    .padding(.top, 24)
             }
             .frame(width: 380)
             liveFeed
@@ -322,7 +327,7 @@ struct MainView: View {
             itemIcon(item, info: info)
             VStack(alignment: .leading, spacing: 3) {
                 Text(info.title).font(.system(size: 14, weight: .medium)).lineLimit(1).truncationMode(.middle)
-                Text("\(category?.title ?? item.kind.label) · \(actionHint(item)) · \(shortPath(item.url))")
+                Text(category?.title ?? item.kind.label)
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.ink3)
                     .lineLimit(1)
@@ -664,8 +669,7 @@ struct MainView: View {
     }
 
     private func scanMeta(_ result: ScanResult) -> String {
-        let count = result.scannedCount >= 10_000 ? "\(result.scannedCount / 10_000) 万项" : "\(result.scannedCount) 项"
-        return "上次扫描 \(Self.ago(result.scannedAt)) · 已检查 \(count)"
+        return "\(Self.ago(result.scannedAt))扫描"
     }
 
     /// Disk card: the ring shows only what is free; name and capacity sit underneath so nothing gets clipped.
@@ -681,7 +685,7 @@ struct MainView: View {
                 .frame(width: 150, height: 150)
             VStack(spacing: 2) {
                 Text(volumeName(result.root)).font(.system(size: 13, weight: .semibold)).lineLimit(1)
-                Text("共 \(ByteFormat.string(totalBytes)) · 已用 \(Int((used / total * 100).rounded()))%")
+                Text("共 \(ByteFormat.string(totalBytes))，已用 \(Int((used / total * 100).rounded()))%")
                     .font(.system(size: 12)).foregroundStyle(Theme.ink2).lineLimit(1)
             }
         }
@@ -901,10 +905,8 @@ struct MainView: View {
         let picked = store.selectedCleanupIDs.contains(item.id)
         let hovered = store.hoveredID == item.id
         let info = ItemPresentation.info(for: item)
-        let location = shortPath(item.url.deletingLastPathComponent())
-        let subtitle = info.title == item.name
-            ? "\(location) · \(tagText(item))"
-            : "\(item.name) · \(location) · \(tagText(item))"
+        // One fact per line: what to do with it. Folder name and path live in the expanded detail.
+        let subtitle = tagText(item)
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
                 checkbox(item)
@@ -1034,7 +1036,7 @@ struct MainView: View {
                         Text("已选 \(pickedCount)").font(.system(size: 11.5)).foregroundStyle(Theme.cyan)
                     }
                 }
-                Text("\(first.name) · \(groupLocation(parents: parents, common: common)) · \(tagText(first))")
+                Text(groupLocation(parents: parents, common: common))
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.ink3)
                     .lineLimit(1)
@@ -1538,9 +1540,9 @@ struct MainView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(store.isCleaning
                          ? "正在检查并移入废纸篓 \(store.cleanedCount)/\(store.selectedCleanupItems.count)"
-                         : empty ? "选择要清理的缓存" : "已选 \(store.selectedCleanupItems.count) 项 · \(ByteFormat.string(store.selectedCleanupBytes))")
+                         : empty ? "选择要清理的项目" : "已选 \(store.selectedCleanupItems.count) 项，共 \(ByteFormat.string(store.selectedCleanupBytes))")
                         .font(.system(size: 14, weight: .semibold)).monospacedDigit()
-                    Text(empty ? "点击列表中的缓存即可选中，再核对路径。"
+                    Text(empty ? "点一下列表里的项目就能选中"
                          : !quit.isEmpty ? "清理前请先退出 \(quit.joined(separator: "、"))"
                          : "移入废纸篓后仍可恢复；清空后才会释放空间。")
                         .font(.system(size: 12.5))
@@ -1584,7 +1586,7 @@ struct MainView: View {
                 Image(systemName: report.movedCount > 0 ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
                     .foregroundStyle(report.movedCount > 0 ? Theme.green : Theme.amber)
                 Text(report.movedCount > 0
-                     ? "已移入废纸篓 \(report.movedCount.formatted()) 项 · \(ByteFormat.string(report.movedBytes))"
+                     ? "已移入废纸篓 \(report.movedCount.formatted()) 项，共 \(ByteFormat.string(report.movedBytes))"
                      : "没有项目被移动")
                     .font(.system(size: 13.5, weight: .semibold))
                 if report.movedCount > 0 {
@@ -1634,7 +1636,16 @@ struct MainView: View {
 
     private func tagText(_ item: ScanItem) -> String {
         guard item.canTrash else { return item.kind.label }
-        return item.risk == .a ? "可重新生成" : "应用缓存，清理前请先退出该应用"
+        return item.risk == .a ? "可重新生成" : "应用缓存，需先退出应用"
+    }
+
+    /// The top-level place being scanned ("~/.workbuddy", "~/Library/Caches/Google"), not the deep file path.
+    private func scanningPlace(_ path: String) -> String {
+        let home = store.policy.home.path
+        guard path.hasPrefix(home + "/") else { return path }
+        let parts = path.dropFirst(home.count + 1).split(separator: "/")
+        let depth = parts.first == "Library" ? 3 : 1
+        return "~/" + parts.prefix(depth).joined(separator: "/")
     }
 
     private func shortPath(_ url: URL) -> String {

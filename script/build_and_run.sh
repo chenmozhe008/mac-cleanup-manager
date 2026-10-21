@@ -8,6 +8,10 @@ BUNDLE_ID="com.forwardyan.MacSpaceKeeper"
 MIN_SYSTEM_VERSION="14.0"
 APP_VERSION="1.0.4"
 CODESIGN_IDENTITY="${CODESIGN_IDENTITY:-Apple Development}"
+# Without that certificate (e.g. a fresh clone), fall back to ad-hoc signing so the build still runs locally.
+if [[ "$CODESIGN_IDENTITY" != "-" ]] && ! security find-identity -v -p codesigning 2>/dev/null | grep -q "$CODESIGN_IDENTITY"; then
+  CODESIGN_IDENTITY="-"
+fi
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_BUNDLE="$ROOT_DIR/dist/$APP_NAME.app"
 APP_MACOS="$APP_BUNDLE/Contents/MacOS"

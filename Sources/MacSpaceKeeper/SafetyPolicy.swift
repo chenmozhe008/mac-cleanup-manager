@@ -19,8 +19,7 @@ struct SafetyPolicy: Sendable {
             "Library/Caches/ms-playwright",
             ".cache/whisper",
             "Library/Developer/Xcode",
-            ".ssh", ".aws", ".codex", ".Trash",
-            "Coding/skills-backup"
+            ".ssh", ".aws", ".codex", ".Trash"
         ]
         protectedRoots = names.map { canonicalHome.appending(path: $0) }
             + extraProtectedRoots
