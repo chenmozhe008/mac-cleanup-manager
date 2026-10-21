@@ -72,10 +72,10 @@ struct Backdrop: View {
         ZStack {
             // The desktop shows through faintly behind the brand gradient (macOS 26 Liquid Glass look).
             WindowBlur()
-            Theme.base.opacity(0.97)
-            RadialGradient(colors: [Color.adaptive(light: rgb(0.72, 0.8, 1.0, 0.12), dark: rgb(0.11, 0.23, 0.54, 0.18)), .clear],
+            Theme.base.opacity(0.84)
+            RadialGradient(colors: [Color.adaptive(light: rgb(0.62, 0.74, 1.0, 0.45), dark: rgb(0.11, 0.23, 0.54, 0.7)), .clear],
                            center: UnitPoint(x: 0.3, y: 0), startRadius: 0, endRadius: 760)
-            RadialGradient(colors: [Color.adaptive(light: rgb(0.85, 0.78, 1.0, 0.08), dark: rgb(0.23, 0.11, 0.54, 0.12)), .clear],
+            RadialGradient(colors: [Color.adaptive(light: rgb(0.82, 0.72, 1.0, 0.38), dark: rgb(0.23, 0.11, 0.54, 0.6)), .clear],
                            center: .bottomTrailing, startRadius: 0, endRadius: 620)
         }
         .ignoresSafeArea()
@@ -96,13 +96,20 @@ struct WindowBlur: NSViewRepresentable {
 }
 
 extension View {
-    /// Content surfaces keep a stable contrast in both appearances.
+    /// Liquid Glass on macOS 26+; `highlighted` tints the active card blue. Older systems get a frosted panel.
+    @ViewBuilder
     func glass(radius: CGFloat = 14, highlighted: Bool = false) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        return self
-            .background(shape.fill(Theme.panel))
-            .overlay(shape.fill(highlighted ? Theme.blue.opacity(0.08) : .clear).allowsHitTesting(false))
-            .overlay(shape.strokeBorder(highlighted ? Theme.blue.opacity(0.45) : Theme.line, lineWidth: 1))
+        if #available(macOS 26.0, *) {
+            self
+                .glassEffect(highlighted ? .regular.tint(Theme.blue.opacity(0.22)) : .regular, in: shape)
+                .overlay(shape.strokeBorder(highlighted ? Theme.blue.opacity(0.45) : .clear, lineWidth: 1).allowsHitTesting(false))
+        } else {
+            self
+                .background(shape.fill(Theme.panel))
+                .overlay(shape.fill(highlighted ? Theme.blue.opacity(0.08) : .clear).allowsHitTesting(false))
+                .overlay(shape.strokeBorder(highlighted ? Theme.blue.opacity(0.45) : Theme.line, lineWidth: 1))
+        }
     }
 }
 
@@ -301,5 +308,59 @@ struct FlowLayout: Layout {
         }
         if !current.indices.isEmpty { rows.append(current) }
         return rows
+    }
+}
+
+
+/// Disk space ring: a glass disc with one gradient arc for the share in use.
+struct DiskRing: View {
+    let usedFraction: Double
+    let low: Bool
+    let free: String
+    let caption: String
+
+    var body: some View {
+        GeometryReader { proxy in
+            let size = min(proxy.size.width, proxy.size.height)
+            let line = size * 0.075
+            let colors = low ? [Theme.amber, Theme.orange, Theme.amber] : [Theme.cyan, Theme.blue, Theme.indigo, Theme.cyan]
+            ZStack {
+                disc(size)
+                Circle()
+                    .stroke(Theme.fill(0.08), lineWidth: line)
+                    .padding(line / 2 + size * 0.04)
+                Circle()
+                    .trim(from: 0, to: min(max(usedFraction, 0.01), 1))
+                    .stroke(AngularGradient(colors: colors, center: .center), style: StrokeStyle(lineWidth: line, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .shadow(color: (low ? Theme.amber : Theme.blue).opacity(0.35), radius: line * 0.6)
+                    .padding(line / 2 + size * 0.04)
+                Circle()
+                    .strokeBorder(LinearGradient(colors: [Color.white.opacity(0.9), Color.white.opacity(0.05), Color.white.opacity(0.35)],
+                                                 startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
+                    .allowsHitTesting(false)
+                VStack(spacing: 4) {
+                    Text(free)
+                        .font(.system(size: size * 0.15, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .foregroundStyle(low ? Theme.amber : Theme.ink)
+                    Text(caption).font(.system(size: 12.5, weight: .medium)).foregroundStyle(low ? Theme.amber : Theme.ink2).lineLimit(1)
+                }
+                .padding(.horizontal, size * 0.16)
+            }
+            .frame(width: size, height: size)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    @ViewBuilder
+    private func disc(_ size: CGFloat) -> some View {
+        if #available(macOS 26.0, *) {
+            Circle().fill(Color.clear).glassEffect(.regular, in: Circle())
+        } else {
+            Circle().fill(Theme.panel)
+        }
     }
 }

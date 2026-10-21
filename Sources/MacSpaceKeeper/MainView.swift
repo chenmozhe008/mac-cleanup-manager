@@ -612,14 +612,16 @@ struct MainView: View {
                 chatView(result)
             } else {
                 VStack(spacing: 14) {
-                    HStack(spacing: 18) {
+                    HStack(alignment: .top, spacing: 12) {
                         // Free space is read live (scan results go stale as soon as anything is deleted).
                         TimelineView(.periodic(from: .now, by: 30)) { _ in
-                            ring(result)
+                            diskCard(result)
                         }
-                        .frame(width: 200, height: 200)
+                        .frame(width: 236)
+                        .frame(maxHeight: .infinity)
                         statsGrid(result)
                     }
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 18)
                     banners
                     listPanel
@@ -666,49 +668,26 @@ struct MainView: View {
         return "上次扫描 \(Self.ago(result.scannedAt)) · 已检查 \(count)"
     }
 
-    private func ring(_ result: ScanResult) -> some View {
+    /// Disk card: the ring shows only what is free; name and capacity sit underneath so nothing gets clipped.
+    private func diskCard(_ result: ScanResult) -> some View {
         let live = volumeCapacity(result.root)
         let totalBytes = live?.total ?? result.volumeTotalBytes ?? 0
         let total = Double(max(totalBytes, 1))
         let free = live?.free ?? result.volumeFreeBytes ?? 0
         let used = Double(max(totalBytes - free, 0))
-        let caches = Double(ScanStore.sum(store.items(in: .caches)))
-        let creative = Double(ScanStore.sum(store.items(in: .creative)))
-        let review = Double(ScanStore.sum(store.items(in: .review)))
-        let large = Double(ScanStore.sum(store.items(in: .large)))
-        let other = max(used - caches - creative - review - large, 0)
         let low = free < Self.lowSpaceBytes
-        return ZStack {
-            UsageRing(segments: [
-                .init(fraction: other / total, style: AnyShapeStyle(Theme.usedTint)),
-                .init(fraction: large / total, style: AnyShapeStyle(Theme.violet)),
-                .init(fraction: creative / total, style: AnyShapeStyle(Theme.pink)),
-                .init(fraction: review / total, style: AnyShapeStyle(Theme.amber)),
-                .init(fraction: caches / total, style: AnyShapeStyle(Theme.accent))
-            ], lineWidth: 13)
-            VStack(spacing: 4) {
-                Text(ByteFormat.string(free))
-                    .font(.system(size: 26, weight: .bold))
-                    .monospacedDigit()
-                    .minimumScaleFactor(0.7)
-                    .lineLimit(1)
-                    .foregroundStyle(low ? Theme.amber : Theme.ink)
-                Text("\(volumeName(result.root)) 可用")
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Theme.ink2)
-                    .lineLimit(1)
-                if low {
-                    Text("剩余空间较少")
-                        .font(.system(size: 11.5, weight: .medium))
-                        .foregroundStyle(Theme.amber)
-                } else if totalBytes > 0 {
-                    Text("共 \(ByteFormat.string(totalBytes))")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Theme.ink3)
-                }
+        return VStack(spacing: 10) {
+            DiskRing(usedFraction: used / total, low: low, free: ByteFormat.string(free), caption: low ? "剩余空间较少" : "可用")
+                .frame(width: 150, height: 150)
+            VStack(spacing: 2) {
+                Text(volumeName(result.root)).font(.system(size: 13, weight: .semibold)).lineLimit(1)
+                Text("共 \(ByteFormat.string(totalBytes)) · 已用 \(Int((used / total * 100).rounded()))%")
+                    .font(.system(size: 12)).foregroundStyle(Theme.ink2).lineLimit(1)
             }
-            .padding(.horizontal, 28)
         }
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .glass()
     }
 
     /// Below this much free space the ring and disk card turn amber. Ratios mislead on big disks.

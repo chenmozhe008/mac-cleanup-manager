@@ -127,13 +127,15 @@ struct AboutView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 14) {
-            SidebarBrandMark()
-            VStack(alignment: .leading, spacing: 6) {
-                Text("关于 Mac 清理管家").font(.system(size: 22, weight: .bold))
-                Text("v\(AppInfo.version) · 作者 \(AppInfo.author) · AI 时代的 Mac 空间清理工具")
-                    .font(.system(size: 13)).foregroundStyle(Theme.ink2)
-                    .fixedSize(horizontal: false, vertical: true)
+        HStack(alignment: .center, spacing: 16) {
+            SidebarBrandMark(size: 60)
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Mac 清理管家").font(.system(size: 24, weight: .bold))
+                Text("AI 时代的 Mac 清理工具")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(LinearGradient(colors: [Theme.blue, Theme.indigo], startPoint: .leading, endPoint: .trailing))
+                Text("v\(AppInfo.version) · 作者 \(AppInfo.author)")
+                    .font(.system(size: 12.5)).foregroundStyle(Theme.ink3)
             }
             Spacer(minLength: 8)
             Button { store.showAbout = false } label: {
@@ -173,39 +175,6 @@ struct AboutView: View {
     /// Order the user asked for: what it is → strengths (AI first, film as the bonus) → comparison.
     private var intro: some View {
         VStack(alignment: .leading, spacing: 28) {
-            HStack(alignment: .center, spacing: 24) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("为什么做它")
-                        .font(.system(size: 13, weight: .semibold)).tracking(1.5)
-                        .foregroundStyle(Color.white.opacity(0.85))
-                    Text("传统清理工具，\n不认识你的 AI 工具。")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .lineSpacing(4).foregroundStyle(.white)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("Cursor、Claude Code、WorkBuddy 这些 AI 工具，每天在电脑里留下运行时、模型和缓存，动不动就是几个 GB。传统清理工具大多不认识它们，分不清哪些是能重新生成的缓存，哪些是你的对话和工作区。Mac 清理管家认得它们，该清的清，该留的留。")
-                        .font(.system(size: 14)).foregroundStyle(Color.white.opacity(0.92))
-                        .lineSpacing(4)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-                ZStack {
-                    Circle().fill(Color.white.opacity(0.07)).frame(width: 120, height: 120)
-                    Circle().strokeBorder(Color.white.opacity(0.18)).frame(width: 96, height: 96)
-                    Image(systemName: "externaldrive.fill")
-                        .font(.system(size: 48, weight: .regular)).foregroundStyle(.white)
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 26)).symbolRenderingMode(.palette)
-                        .foregroundStyle(.white, Color(red: 0.08, green: 0.65, blue: 0.48))
-                        .offset(x: 30, y: 24)
-                }
-                .accessibilityHidden(true)
-            }
-            .padding(.horizontal, 26)
-            .padding(.vertical, 22)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(LinearGradient(colors: [Color(red: 0.08, green: 0.24, blue: 0.57), Color(red: 0.15, green: 0.19, blue: 0.40)], startPoint: .topLeading, endPoint: .bottomTrailing))
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-
             VStack(alignment: .leading, spacing: 12) {
                 Text("它的优势").font(.system(size: 18, weight: .bold))
                 advantage("懂 AI Coding", nil, "chevron.left.forwardslash.chevron.right", Theme.blue,
@@ -223,7 +192,7 @@ struct AboutView: View {
             }
 
             VStack(alignment: .leading, spacing: 14) {
-                Text("和其他清理工具比一比").font(.system(size: 18, weight: .bold))
+                Text("对比与说明").font(.system(size: 18, weight: .bold))
                 comparisonTable
                 Text("资料整理于 2026 年 10 月，价格和功能以各产品官方说明为准。")
                     .font(.system(size: 13)).foregroundStyle(Theme.ink2)
