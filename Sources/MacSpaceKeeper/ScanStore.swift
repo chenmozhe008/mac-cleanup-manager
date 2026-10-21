@@ -33,6 +33,19 @@ final class ScanStore: ObservableObject {
     @Published var hasFullDiskAccess = false
     /// Same-name rows (e.g. hundreds of __pycache__) that the user expanded.
     @Published var expandedGroups: Set<String> = []
+    /// Chat app shown on the right of the WeChat page.
+    @Published var selectedChatID: String?
+    /// Text just copied from the About page; its button reads "已复制" briefly.
+    @Published var copiedText: String?
+
+    func copy(_ text: String) {
+        AppInfo.copy(text)
+        copiedText = text
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1.8))
+            if self?.copiedText == text { self?.copiedText = nil }
+        }
+    }
 
     let policy = SafetyPolicy()
     private var scanID = UUID()
@@ -54,6 +67,13 @@ final class ScanStore: ObservableObject {
         refreshFullDiskAccess()
         appearance.apply()
         loadLastResult()
+        // For screenshots without touching the mouse: `open -a … --args --show-about[=反馈]` / `--scan`.
+        let arguments = ProcessInfo.processInfo.arguments
+        if let about = arguments.first(where: { $0.hasPrefix("--show-about") }) {
+            showAbout = true
+            aboutTab = AboutTab(rawValue: String(about.drop { $0 != "=" }.dropFirst())) ?? .intro
+        }
+        if arguments.contains("--scan") { scan() }
     }
 
     // MARK: Derived data
@@ -321,7 +341,7 @@ final class ScanStore: ObservableObject {
                 Task { @MainActor in
                     guard let store, store.scanID == thisScan, store.isScanning else { return }
                     // A cache folder replaces anything already listed inside it, same as the final result.
-                    if item.kind == .cache {
+                    if item.kind == .cache || item.kind == .review {
                         let prefix = item.url.path + "/"
                         store.liveFound.removeAll { $0.url.path.hasPrefix(prefix) }
                     }
@@ -391,7 +411,15 @@ final class ScanStore: ObservableObject {
             result = nil
             return
         }
-        result = value
+        let checkedItems = value.items.map { item in
+            guard item.canTrash, policy.cacheDescription(for: item.url, isDirectory: true) == nil else { return item }
+            return ScanItem(id: item.id, url: item.url, kind: .review, risk: .c, bytes: item.bytes,
+                            note: "清理规则已更新，此位置仅显示占用。重新扫描可更新结果。", canTrash: false, identity: item.identity)
+        }
+        result = ScanResult(root: value.root, isQuickScan: value.isQuickScan, items: checkedItems,
+                            totalBytes: value.totalBytes, volumeTotalBytes: value.volumeTotalBytes,
+                            volumeFreeBytes: value.volumeFreeBytes, skippedCount: value.skippedCount,
+                            scannedCount: value.scannedCount, scannedAt: value.scannedAt, chatApps: value.chatApps)
         // Reopen on the category last viewed.
         if let saved = UserDefaults.standard.string(forKey: Keys.lastFilter).flatMap(ItemFilter.init(rawValue:)) {
             filter = saved
@@ -433,6 +461,9 @@ final class ScanStore: ObservableObject {
             let service = TrashService(policy: scanPolicy)
             for item in items {
                 do {
+                    if await MainActor.run(body: { ItemPresentation.runningOwner(of: item) != nil }) {
+                        throw TrashError.inUse
+                    }
                     _ = try service.moveToTrash(item)
                     moved.append(item.id)
                     let addition = movedBytes.addingReportingOverflow(item.bytes)
@@ -461,6 +492,7 @@ enum ItemFilter: String, CaseIterable, Identifiable {
     case review = "需要判断"
     case large = "大文件与工程"
     var id: String { rawValue }
+    var title: String { self == .creative ? "创作与 AI 工具" : rawValue }
 
     func contains(_ item: ScanItem) -> Bool {
         let creative = CreativeApp.of(item) != nil
@@ -469,7 +501,7 @@ enum ItemFilter: String, CaseIterable, Identifiable {
         case .creative: return creative
         case .chat: return false
         case .review: return item.kind == .review && !creative
-        case .large: return item.kind == .project || item.kind == .largeFile
+        case .large: return (item.kind == .project || item.kind == .largeFile) && !creative
         }
     }
 }
@@ -498,10 +530,11 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
 
     /// AppKit views (window blur, dynamic NSColors) follow NSApp.appearance, not SwiftUI's scheme.
     @MainActor func apply() {
+        guard let application = NSApp else { return }
         switch self {
-        case .system: NSApp.appearance = nil
-        case .light: NSApp.appearance = NSAppearance(named: .aqua)
-        case .dark: NSApp.appearance = NSAppearance(named: .darkAqua)
+        case .system: application.appearance = nil
+        case .light: application.appearance = NSAppearance(named: .aqua)
+        case .dark: application.appearance = NSAppearance(named: .darkAqua)
         }
     }
 }

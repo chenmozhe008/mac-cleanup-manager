@@ -17,9 +17,9 @@ struct MainView: View {
         HStack(spacing: 0) {
             if showSidebar {
                 sidebar
-                    .frame(width: 256)
-                    .glass(radius: 20)
-                    .padding(10)
+                    .frame(width: 260)
+                    .background(Theme.panel)
+                    .overlay(alignment: .trailing) { Rectangle().fill(Theme.line).frame(width: 1) }
             }
             Group {
                 if store.isScanning {
@@ -100,7 +100,7 @@ struct MainView: View {
             }
             if !store.hasFullDiskAccess {
                 Button { store.openFullDiskAccessSettings() } label: {
-                    Label("开启「完全磁盘访问」后，就不会反复弹出授权窗口了", systemImage: "exclamationmark.shield.fill")
+                    Label("开启完全磁盘访问，查看更完整的占用情况", systemImage: "exclamationmark.shield.fill")
                         .font(.system(size: 12.5))
                         .foregroundStyle(Theme.amber)
                 }
@@ -128,7 +128,7 @@ struct MainView: View {
     @ViewBuilder
     private func diskCard(_ url: URL, name: String, icon: String) -> some View {
         if let capacity = volumeCapacity(url), capacity.total > 0 {
-            let low = capacity.free < 6 * 1_073_741_824
+            let low = capacity.free < Self.lowSpaceBytes
             HStack(alignment: .center, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
                     Label(name, systemImage: icon)
@@ -309,7 +309,7 @@ struct MainView: View {
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             HStack(spacing: 10) {
                 liveTotal("可清理缓存", ByteFormat.string(ScanStore.sum(caches)), Theme.cyan)
-                liveTotal("剪辑软件缓存", ByteFormat.string(ScanStore.sum(creative)), Theme.pink)
+                liveTotal("创作与 AI 工具", ByteFormat.string(ScanStore.sum(creative)), Theme.pink)
                 liveTotal("大文件与工程", "\(large.count) 项", Theme.violet)
             }
         }
@@ -322,7 +322,7 @@ struct MainView: View {
             itemIcon(item, info: info)
             VStack(alignment: .leading, spacing: 3) {
                 Text(info.title).font(.system(size: 14, weight: .medium)).lineLimit(1).truncationMode(.middle)
-                Text("\(category?.rawValue ?? item.kind.label) · \(actionHint(item)) · \(item.url.deletingLastPathComponent().lastPathComponent)")
+                Text("\(category?.title ?? item.kind.label) · \(actionHint(item)) · \(item.url.deletingLastPathComponent().lastPathComponent)")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.ink3)
                     .lineLimit(1)
@@ -352,7 +352,7 @@ struct MainView: View {
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 10) {
-                brandIcon(32).shadow(color: Theme.blue.opacity(0.5), radius: 6, y: 3)
+                brandIcon(38).shadow(color: .black.opacity(0.12), radius: 3, y: 1)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Mac 清理管家").font(.system(size: 14.5, weight: .semibold))
                     Text("扫描只读，清理前确认").font(.system(size: 11.5)).foregroundStyle(Theme.ink3)
@@ -361,87 +361,94 @@ struct MainView: View {
             .padding(.horizontal, 8)
             .padding(.bottom, 10)
 
-            if store.result != nil { overviewRow }
-            sectionHeader("扫描位置")
-            locationRow("快速扫描", icon: "bolt.fill", url: home, quick: true)
-            locationRow("完整扫描", icon: "house.fill", url: home, quick: false)
-            ForEach(otherVolumes, id: \.self) { volume in
-                locationRow(volume.lastPathComponent, icon: "externaldrive.fill", url: volume, quick: false)
-            }
-            ForEach(store.savedFolders, id: \.self) { folder in
-                locationRow(folder.lastPathComponent, icon: "folder.fill", url: folder, quick: false, removable: true)
-                    .contextMenu {
-                        Button("在访达中显示") { NSWorkspace.shared.activateFileViewerSelecting([folder]) }
-                        Button("从列表移除") { store.removeSavedFolder(folder) }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 3) {
+                    if store.result != nil { overviewRow }
+                    sectionHeader("扫描位置")
+                    locationRow("快速扫描", icon: "bolt.fill", url: home, quick: true)
+                    locationRow("完整扫描", icon: "house.fill", url: home, quick: false)
+                    ForEach(otherVolumes, id: \.self) { volume in
+                        locationRow(volume.lastPathComponent, icon: "externaldrive.fill", url: volume, quick: false)
                     }
-            }
-            addFolderRow
+                    ForEach(store.savedFolders, id: \.self) { folder in
+                        locationRow(folder.lastPathComponent, icon: "folder.fill", url: folder, quick: false, removable: true)
+                            .contextMenu {
+                                Button("在访达中显示") { NSWorkspace.shared.activateFileViewerSelecting([folder]) }
+                                Button("从列表移除") { store.removeSavedFolder(folder) }
+                            }
+                    }
+                    addFolderRow
 
-            if store.result != nil {
-                sectionHeader("分类").padding(.top, 12)
-            }
-            ForEach(store.result == nil ? [] : ItemFilter.allCases) { category in
-                let items = store.items(in: category)
-                switch category {
-                case .chat:
-                    if let chats = store.result?.chatApps, !chats.isEmpty {
-                        categoryRow(category, bytes: chats.reduce(0) { $0 + ($1.bytes ?? 0) })
+                    if store.result != nil {
+                        sectionHeader("分类").padding(.top, 12)
                     }
-                case .creative:
-                    if !items.isEmpty || !installedCreativeApps.isEmpty {
-                        categoryRow(category, bytes: ScanStore.sum(items))
-                    }
-                default:
-                    // Keep the sidebar in step with the six overview cards.
-                    if category == .caches || category == .large || !items.isEmpty {
-                        categoryRow(category, bytes: ScanStore.sum(items))
+                    ForEach(store.result == nil ? [] : ItemFilter.allCases) { category in
+                        let items = store.items(in: category)
+                        switch category {
+                        case .chat:
+                            if let chats = store.result?.chatApps, !chats.isEmpty {
+                                categoryRow(category, bytes: chats.reduce(0) { $0 + ($1.bytes ?? 0) })
+                            }
+                        case .creative:
+                            if !items.isEmpty {
+                                categoryRow(category, bytes: ScanStore.sum(items))
+                            }
+                        default:
+                            // Keep the sidebar in step with the six overview cards.
+                            if category == .caches || category == .large || !items.isEmpty {
+                                categoryRow(category, bytes: ScanStore.sum(items))
+                            }
+                        }
                     }
                 }
+                .padding(.vertical, 8)
             }
-            Spacer(minLength: 12)
+            .scrollIndicators(.hidden)
+            Divider().padding(.vertical, 8)
             permissionCard
             appearancePicker
             Button { store.aboutTab = .intro; store.showAbout = true } label: {
                 HStack(spacing: 10) {
-                    IconTile(symbol: "info", tint: Color(red: 0.56, green: 0.56, blue: 0.6), size: 28)
-                    Text("关于与反馈").font(.system(size: 14.5, weight: .medium))
+                    Image(systemName: "info.circle").font(.system(size: 16)).foregroundStyle(Theme.ink2)
+                    Text("关于与反馈").font(.system(size: 13, weight: .medium))
                     Spacer(minLength: 4)
                     Text("v\(AppInfo.version)").font(.system(size: 12)).foregroundStyle(Theme.ink3)
                 }
                 .foregroundStyle(Theme.ink)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.fill(0.08)))
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .padding(.top, 6)
         }
         .padding(.top, 40)
-        .padding(.horizontal, 10)
-        .padding(.bottom, 12)
+        .padding(.horizontal, 14)
+        .padding(.bottom, 14)
     }
 
     private var appearancePicker: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 2) {
             ForEach(AppearanceMode.allCases) { mode in
                 let on = store.appearance == mode
                 Button { store.appearance = mode } label: {
-                    Image(systemName: mode.symbol)
-                        .font(.system(size: 12.5, weight: .semibold))
+                    Label(mode.rawValue, systemImage: mode.symbol)
+                        .labelStyle(.iconOnly)
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(on ? Theme.ink : Theme.ink3)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(on ? Theme.fill(0.14) : .clear))
-                        .contentShape(Capsule())
+                        .padding(.vertical, 5)
+                        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(on ? Theme.fill(0.12) : .clear))
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .help("外观：\(mode.rawValue)")
             }
         }
-        .padding(3)
-        .background(Capsule().fill(Theme.fill(0.05)))
-        .padding(.top, 8)
+        .padding(2)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Theme.fill(0.05)))
+        .padding(.horizontal, 6)
+        .padding(.top, 10)
     }
 
     private var overviewRow: some View {
@@ -547,12 +554,15 @@ struct MainView: View {
         return Button { withAnimation(.easeOut(duration: 0.15)) { store.selectCategory(category) } } label: {
             HStack(spacing: 10) {
                 IconTile(symbol: Theme.symbol(category), tint: tint, size: 24)
-                Text(category.rawValue).lineLimit(1)
+                Text(category.title).lineLimit(1)
                 Spacer(minLength: 4)
-                Text(ByteFormat.string(bytes))
-                    .font(.system(size: 12.5))
-                    .monospacedDigit()
-                    .foregroundStyle(selected ? Theme.softInk : Theme.ink3)
+                if bytes > 0 {
+                    Text(ByteFormat.string(bytes))
+                        .font(.system(size: 12))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.ink3)
+                        .fixedSize()
+                }
             }
             .font(.system(size: 14))
             .foregroundStyle(selected ? Theme.ink : Theme.ink2)
@@ -562,29 +572,23 @@ struct MainView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("分类：\(category.rawValue)")
+        .accessibilityLabel("分类：\(category.title)")
     }
 
     @ViewBuilder
     private var permissionCard: some View {
         if store.hasFullDiskAccess {
-            HStack(spacing: 8) {
-                Image(systemName: "checkmark.shield.fill").font(.system(size: 15)).foregroundStyle(Theme.green)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("已开启完全磁盘访问").font(.system(size: 12, weight: .medium))
-                    Text("不会再反复弹出授权窗口").font(.system(size: 11)).foregroundStyle(Theme.ink3)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(10)
-            .background(RoundedRectangle(cornerRadius: 10).fill(Theme.green.opacity(0.08)))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.green.opacity(0.25)))
+            Label("完全磁盘访问已开启", systemImage: "checkmark.shield.fill")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.ink2)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
         } else {
             VStack(alignment: .leading, spacing: 6) {
                 Label("未开启完全磁盘访问", systemImage: "exclamationmark.shield.fill")
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(Theme.amber)
-                Text("开启后不会反复弹出授权窗口，也能看到微信占了多少空间。")
+                Text("授权后可读取更多缓存和聊天文件的占用。")
                     .font(.system(size: 11.5))
                     .foregroundStyle(Theme.ink2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -608,12 +612,12 @@ struct MainView: View {
                 chatView(result)
             } else {
                 VStack(spacing: 14) {
-                    HStack(spacing: 24) {
+                    HStack(spacing: 18) {
                         // Free space is read live (scan results go stale as soon as anything is deleted).
                         TimelineView(.periodic(from: .now, by: 30)) { _ in
                             ring(result)
                         }
-                        .frame(width: 184, height: 184)
+                        .frame(width: 200, height: 200)
                         statsGrid(result)
                     }
                     .padding(.top, 18)
@@ -633,13 +637,13 @@ struct MainView: View {
         HStack(spacing: 10) {
             if !store.isOverview {
                 Button { withAnimation(.easeOut(duration: 0.15)) { store.showOverview() } } label: {
-                    Label("总览", systemImage: "chevron.left")
+                    Label("返回总览", systemImage: "chevron.left")
                 }
-                .buttonStyle(ToolbarButtonStyle())
+                .buttonStyle(ToolbarButtonStyle(large: true))
                 .keyboardShortcut("[", modifiers: .command)
                 .help("回到总览（⌘[）")
             }
-            Text(store.isOverview ? store.scopeTitle : store.filter.rawValue)
+            Text(store.isOverview ? store.scopeTitle : store.filter.title)
                 .font(.system(size: 17, weight: .bold))
             Text(scanMeta(result))
                 .font(.system(size: 12.5))
@@ -648,7 +652,7 @@ struct MainView: View {
             Spacer()
             Button { store.scan() } label: { Label("重新扫描", systemImage: "arrow.clockwise") }
                 .buttonStyle(ToolbarButtonStyle(prominent: true, large: true))
-                .shadow(color: Theme.blue.opacity(0.45), radius: 10, y: 4)
+
                 .help("重新扫描「\(store.scopeTitle)」（⌘R）")
         }
         .disabled(store.isCleaning)
@@ -673,36 +677,42 @@ struct MainView: View {
         let review = Double(ScanStore.sum(store.items(in: .review)))
         let large = Double(ScanStore.sum(store.items(in: .large)))
         let other = max(used - caches - creative - review - large, 0)
-        let freeRatio = totalBytes > 0 ? Double(free) / Double(totalBytes) : 1
-        let low = free < 6 * 1_073_741_824 || freeRatio < 0.05
+        let low = free < Self.lowSpaceBytes
         return ZStack {
             UsageRing(segments: [
-                .init(fraction: other / total, style: AnyShapeStyle(Theme.track)),
+                .init(fraction: other / total, style: AnyShapeStyle(Theme.usedTint)),
                 .init(fraction: large / total, style: AnyShapeStyle(Theme.violet)),
                 .init(fraction: creative / total, style: AnyShapeStyle(Theme.pink)),
                 .init(fraction: review / total, style: AnyShapeStyle(Theme.amber)),
-                .init(fraction: caches / total, style: AnyShapeStyle(Theme.accent), glow: Theme.cyan)
-            ], lineWidth: 15)
-            VStack(spacing: 3) {
+                .init(fraction: caches / total, style: AnyShapeStyle(Theme.accent))
+            ], lineWidth: 13)
+            VStack(spacing: 4) {
                 Text(ByteFormat.string(free))
-                    .font(.system(size: 28, weight: .bold))
+                    .font(.system(size: 26, weight: .bold))
                     .monospacedDigit()
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
                     .foregroundStyle(low ? Theme.amber : Theme.ink)
                 Text("\(volumeName(result.root)) 可用")
                     .font(.system(size: 12.5))
                     .foregroundStyle(Theme.ink2)
+                    .lineLimit(1)
                 if low {
-                    Text("只剩 \(max(Int((freeRatio * 100).rounded()), 1))%，空间不足")
+                    Text("剩余空间较少")
                         .font(.system(size: 11.5, weight: .medium))
                         .foregroundStyle(Theme.amber)
                 } else if totalBytes > 0 {
-                    Text("共 \(ByteFormat.string(totalBytes)) · \(Int(used / total * 100))% 已用")
-                        .font(.system(size: 11))
+                    Text("共 \(ByteFormat.string(totalBytes))")
+                        .font(.system(size: 11.5))
                         .foregroundStyle(Theme.ink3)
                 }
             }
+            .padding(.horizontal, 28)
         }
     }
+
+    /// Below this much free space the ring and disk card turn amber. Ratios mislead on big disks.
+    static let lowSpaceBytes: Int64 = 10 * 1_073_741_824
 
     private func statsGrid(_ result: ScanResult) -> some View {
         Grid(horizontalSpacing: 12, verticalSpacing: 12) {
@@ -730,7 +740,7 @@ struct MainView: View {
             detail = "没有发现"
         } else if category == .creative {
             let here = ScanStore.sum(items.filter(\.canTrash))
-            detail = here > 0 ? "\(unit) · 其中 \(ByteFormat.string(here)) 可在这里清理" : "\(unit) · 需要在软件里清理"
+            detail = here > 0 ? "\(unit) · \(ByteFormat.string(here)) 可以清理" : "\(unit) · 只统计，不删除"
         } else {
             detail = "\(unit) · \(items.count) 项"
         }
@@ -738,14 +748,19 @@ struct MainView: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     IconTile(symbol: Theme.symbol(category), tint: Theme.color(category), size: 18)
-                    Text(category.rawValue)
+                    Text(category.title)
                 }
                 .font(.system(size: 12.5))
                 .foregroundStyle(Theme.ink2)
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
                     Text(unavailable || items.isEmpty ? "—" : number).font(.system(size: 22, weight: .bold)).monospacedDigit()
-                    Text(detail).font(.system(size: 12.5)).foregroundStyle(Theme.ink3).lineLimit(1)
+                    if !(unavailable || items.isEmpty) {
+                        Text(unit).font(.system(size: 12.5)).foregroundStyle(Theme.ink2)
+                    }
                 }
+                Text(unavailable || items.isEmpty ? detail : detail.replacingOccurrences(of: unit + " · ", with: ""))
+                    .font(.system(size: 12)).foregroundStyle(Theme.ink2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
@@ -773,7 +788,7 @@ struct MainView: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     IconTile(symbol: Theme.symbol(.chat), tint: Theme.green, size: 18)
-                    Text(ItemFilter.chat.rawValue)
+                    Text(ItemFilter.chat.title)
                 }
                 .font(.system(size: 12.5))
                 .foregroundStyle(Theme.ink2)
@@ -782,8 +797,11 @@ struct MainView: View {
                         .font(.system(size: 22, weight: .bold))
                         .monospacedDigit()
                         .foregroundStyle(over ? Theme.amber : Theme.ink)
-                    Text(detail).font(.system(size: 12.5)).foregroundStyle(over ? Theme.amber.opacity(0.85) : Theme.ink3).lineLimit(1)
+                    Text(unit).font(.system(size: 12.5)).foregroundStyle(Theme.ink2)
                 }
+                Text(detail.replacingOccurrences(of: unit + " · ", with: ""))
+                    .font(.system(size: 12)).foregroundStyle(Theme.ink2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
@@ -807,8 +825,11 @@ struct MainView: View {
                 .foregroundStyle(Theme.softInk)
             HStack(alignment: .firstTextBaseline, spacing: 5) {
                 Text(number).font(.system(size: 22, weight: .bold)).monospacedDigit()
-                Text("\(unit) · 清空废纸篓后释放").font(.system(size: 12.5)).foregroundStyle(Theme.ink2).lineLimit(1)
+                Text(unit).font(.system(size: 12.5)).foregroundStyle(Theme.ink2)
             }
+            Text("清空废纸篓后释放")
+                .font(.system(size: 12)).foregroundStyle(Theme.ink2)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
@@ -1110,182 +1131,270 @@ struct MainView: View {
     // MARK: Creative apps
 
     private func creativeView(_ result: ScanResult) -> some View {
-        let items = store.items(in: .creative)
-        let here = ScanStore.sum(items.filter(\.canTrash))
-        let inApp = ScanStore.sum(items.filter { !$0.canTrash })
+        let items = store.items(in: .creative).filter { $0.bytes > 0 || CreativeApp.isReviewCache($0.url) }
+        let found = CreativeApp.allCases.filter { app in items.contains { CreativeApp.of($0) == app } }
+        let idle = CreativeApp.allCases.filter { $0.isInstalled && !found.contains($0) }
+        let cleanable = ScanStore.sum(items.filter(\.canTrash))
+        let readOnly = ScanStore.sum(items.filter { !$0.canTrash })
         let headline: String = {
-            if items.isEmpty { return "没有发现剪辑软件的缓存" }
-            if inApp == 0 { return "\(ByteFormat.string(here)) 可以在这里清理" }
-            if here == 0 { return "\(ByteFormat.string(inApp)) 需要在软件里清理" }
-            return "\(ByteFormat.string(here)) 可以在这里清理，\(ByteFormat.string(inApp)) 需要在软件里清理"
+            if found.isEmpty { return "没有发现创作和 AI 工具的占用" }
+            if cleanable == 0 { return "\(found.count) 个工具共占用 \(ByteFormat.string(readOnly))" }
+            return "\(ByteFormat.string(cleanable)) 可以在这里清理"
         }()
+        var notes: [String] = []
+        if cleanable > 0, readOnly > 0 { notes.append("另有 \(ByteFormat.string(readOnly)) 是工程、模型和对话等数据，只统计、不删除。") }
+        if cleanable == 0, readOnly > 0 { notes.append("都是工程、模型和对话等数据，只统计、不删除，要清理请在各自软件里操作。") }
+        if result.isQuickScan { notes.append("Final Cut 渲染文件和达芬奇 CacheClip 需要完整扫描才能找到。") }
         return ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(headline).font(.system(size: 24, weight: .bold))
-                    Text(result.isQuickScan
-                         ? "快速扫描只检查 After Effects、Adobe 和 Blender 的缓存。Final Cut 渲染文件和达芬奇 CacheClip 需要完整扫描才能找到。"
-                         : "缓存清理后，下次打开软件时会自动重新生成。工程文件和素材不会被动到。")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.ink2)
-                }
-                .padding(.bottom, 6)
-                if let report = store.cleanupReport { cleanupReportBanner(report) }
-                ForEach(CreativeApp.allCases, id: \.self) { app in
-                    let appItems = items.filter { CreativeApp.of($0) == app }
-                    if !appItems.isEmpty {
-                        creativeGroup(app, items: appItems)
-                    } else if installedCreativeApps.contains(app) {
-                        creativeEmptyCard(app, unchecked: result.isQuickScan && (app == .finalCut || app == .davinci))
+                    if !notes.isEmpty {
+                        Text(notes.joined(separator: ""))
+                            .font(.system(size: 13)).foregroundStyle(Theme.ink2)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+                .padding(.bottom, 4)
+                if let report = store.cleanupReport { cleanupReportBanner(report) }
+                ForEach(CreativeApp.Group.allCases, id: \.self) { group in
+                    let apps = found.filter { $0.group == group }
+                    if !apps.isEmpty {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(group.rawValue).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink2)
+                            Spacer()
+                            Text(ByteFormat.string(ScanStore.sum(items.filter { app in apps.contains { CreativeApp.of(app) == $0 } })))
+                                .font(.system(size: 12.5)).monospacedDigit().foregroundStyle(Theme.ink3)
+                        }
+                        .padding(.top, 6)
+                        ForEach(apps) { app in creativeGroup(app, items: items.filter { CreativeApp.of($0) == app }) }
+                    }
+                }
+                if !idle.isEmpty {
+                    creativeIdleCard(idle)
+                }
+                creativeCoverage
             }
             .padding(.horizontal, 26)
             .padding(.vertical, 22)
         }
     }
 
-    private var installedCreativeApps: [CreativeApp] {
-        CreativeApp.allCases.filter { ItemPresentation.appIcon(bundleID: $0.bundleID) != nil }
+    /// Installed tools with nothing on disk worth a row, in one line instead of empty cards.
+    private func creativeIdleCard(_ apps: [CreativeApp]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("这些软件已安装，没发现明显占用", systemImage: "checkmark.circle.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.green)
+            FlowLayout(spacing: 8) {
+                ForEach(apps) { app in
+                    HStack(spacing: 6) {
+                        if let icon = ItemPresentation.appIcon(bundleID: app.bundleID) {
+                            Image(nsImage: icon).resizable().frame(width: 18, height: 18)
+                        }
+                        Text(app.title).font(.system(size: 12.5))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(Theme.fill(0.06)))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .glass()
     }
 
-    /// Installed app with nothing found: still its own card, so it's clear it was checked and where to look.
-    private func creativeEmptyCard(_ app: CreativeApp, unchecked: Bool) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            if let icon = ItemPresentation.appIcon(bundleID: app.bundleID) {
-                Image(nsImage: icon).resizable().frame(width: 40, height: 40)
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 10) {
-                    Text(app.title).font(.system(size: 15.5, weight: .semibold))
-                    Label(unchecked ? "需要完整扫描" : "目前没有缓存", systemImage: unchecked ? "clock" : "checkmark.circle.fill")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(unchecked ? Theme.ink2 : Theme.green)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill((unchecked ? Color.white : Theme.green).opacity(0.1)))
+    /// Everything this page recognizes, so people without these apps still see what is covered.
+    private var creativeCoverage: some View {
+        let key = "creative:coverage"
+        let expanded = store.expandedGroups.contains(key)
+        return VStack(alignment: .leading, spacing: 10) {
+            Button {
+                withAnimation(.easeOut(duration: 0.18)) {
+                    if expanded { store.expandedGroups.remove(key) } else { store.expandedGroups.insert(key) }
                 }
-                Text("缓存位置：\(app.cacheWhere)").font(.system(size: 12.5)).foregroundStyle(Theme.ink2)
-                Text("清理方法：\(app.cleanHow)").font(.system(size: 12.5)).foregroundStyle(Theme.ink3)
+            } label: {
+                HStack {
+                    Text("能识别的 \(CreativeApp.allCases.count) 款工具").font(.system(size: 13, weight: .semibold))
+                    Spacer()
+                    Image(systemName: expanded ? "chevron.up" : "chevron.down").font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundStyle(Theme.ink2)
+                .contentShape(Rectangle())
             }
-            Spacer(minLength: 0)
+            .buttonStyle(.plain)
+            if expanded {
+                ForEach(CreativeApp.Group.allCases, id: \.self) { group in
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        Text(group.rawValue).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Theme.ink2).frame(width: 110, alignment: .leading)
+                        Text(CreativeApp.allCases.filter { $0.group == group }.map(\.title).joined(separator: "、"))
+                            .font(.system(size: 12.5)).foregroundStyle(Theme.ink3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Text("各软件的缓存可以清理；工程、素材、模型和对话只统计，不提供删除。")
+                    .font(.system(size: 12)).foregroundStyle(Theme.ink3).padding(.top, 2)
+            }
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
+        .padding(16)
         .glass()
+    }
+
+    private func groupTint(_ group: CreativeApp.Group) -> Color {
+        switch group {
+        case .video: Theme.pink
+        case .design: Theme.violet
+        case .aiCreate: Theme.amber
+        case .aiChat: Theme.green
+        case .aiCode: Theme.blue
+        case .localModel: Theme.cyan
+        }
     }
 
     // MARK: Chat apps
 
     private func chatView(_ result: ScanResult) -> some View {
-        let total = result.chatApps.reduce(0) { $0 + ($1.bytes ?? 0) }
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("微信和企业微信共占用 \(ByteFormat.string(total))").font(.system(size: 24, weight: .bold))
-                    Text("聊天数据只能在微信里清理。这里只显示占用大小和清理方法，不会删除任何内容。")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.ink2)
+        let chats = result.chatApps
+        let total = chats.reduce(Int64(0)) { $0 + ($1.bytes ?? 0) }
+        let selected = chats.first { $0.id == store.selectedChatID } ?? chats.max { ($0.bytes ?? 0) < ($1.bytes ?? 0) }
+        return HStack(alignment: .top, spacing: 18) {
+            VStack(spacing: 14) {
+                ZStack {
+                    UsageRing(segments: chats.map { chat in
+                        .init(fraction: Double(chat.bytes ?? 0) / Double(max(total, 1)), style: AnyShapeStyle(chatTint(chat.id)))
+                    }, lineWidth: 12)
+                    VStack(spacing: 3) {
+                        Text(ByteFormat.string(total)).font(.system(size: 24, weight: .bold)).monospacedDigit()
+                        Text("聊天软件共占用").font(.system(size: 12)).foregroundStyle(Theme.ink2)
+                    }
                 }
-                .padding(.bottom, 4)
-                ForEach(result.chatApps) { chat in chatGuideCard(chat) }
+                .frame(width: 170, height: 170)
+                .padding(.vertical, 6)
+                ForEach(chats) { chat in chatAppCard(chat, selected: chat.id == selected?.id) }
+                Text("这里只读大小，不会删除聊天记录或文件。")
+                    .font(.system(size: 11.5)).foregroundStyle(Theme.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 26)
-            .padding(.vertical, 22)
+            .frame(width: 290)
+            ScrollView {
+                if let selected { chatGuide(selected) }
+            }
+            .frame(maxWidth: .infinity)
         }
+        .padding(.horizontal, 26)
+        .padding(.vertical, 22)
     }
 
-    /// Collapsed by default: size, status and the open button. The how-to opens on demand.
-    private func chatGuideCard(_ chat: ChatAppUsage) -> some View {
-        let bytes = chat.bytes ?? 0
-        let over = bytes >= 2_000_000_000
-        let key = "chat:\(chat.id)"
-        let expanded = store.expandedGroups.contains(key)
+    private func chatTint(_ id: String) -> Color { id == "com.tencent.xinWeChat" ? Theme.green : Theme.blue }
+
+    private func chatAppCard(_ chat: ChatAppUsage, selected: Bool) -> some View {
+        let over = (chat.bytes ?? 0) >= 2_000_000_000
+        return Button { withAnimation(.easeOut(duration: 0.15)) { store.selectedChatID = chat.id } } label: {
+            HStack(spacing: 12) {
+                if let icon = ItemPresentation.appIcon(bundleID: chat.id) {
+                    Image(nsImage: icon).resizable().frame(width: 40, height: 40)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(chat.name).font(.system(size: 14.5, weight: .semibold))
+                    Text(chat.bytes == nil ? "需要开启权限" : (over ? "建议清理" : "暂时不用清"))
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(chat.bytes == nil || over ? Theme.amber : Theme.green)
+                }
+                Spacer(minLength: 6)
+                Text(chat.bytes.map(ByteFormat.string) ?? "—")
+                    .font(.system(size: 16, weight: .bold)).monospacedDigit()
+                    .foregroundStyle(over ? Theme.amber : Theme.ink)
+            }
+            .padding(14)
+            .overlay(alignment: .leading) {
+                if selected { RoundedRectangle(cornerRadius: 2).fill(chatTint(chat.id)).frame(width: 4).padding(.vertical, 14) }
+            }
+            .glass(highlighted: selected)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Right column: a short verdict first; the step-by-step guide opens on demand.
+    private func chatGuide(_ chat: ChatAppUsage) -> some View {
         let version = NSWorkspace.shared.urlForApplication(withBundleIdentifier: chat.id)
             .flatMap { Bundle(url: $0)?.infoDictionary?["CFBundleShortVersionString"] as? String }
-        let toggle = {
-            withAnimation(.easeOut(duration: 0.18)) {
-                if expanded { store.expandedGroups.remove(key) } else { store.expandedGroups.insert(key) }
-            }
-        }
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 14) {
-                if let icon = ItemPresentation.appIcon(bundleID: chat.id) {
-                    Image(nsImage: icon).resizable().frame(width: 44, height: 44)
-                }
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text(chat.name).font(.system(size: 17, weight: .semibold))
-                        Text(chat.bytes == nil ? "—" : ByteFormat.string(bytes))
-                            .font(.system(size: 17, weight: .bold))
-                            .monospacedDigit()
-                            .foregroundStyle(over ? Theme.amber : Theme.ink)
-                    }
+        let tint = chatTint(chat.id)
+        let over = (chat.bytes ?? 0) >= 2_000_000_000
+        let key = "chat:\(chat.id)"
+        let expanded = store.expandedGroups.contains(key)
+        let verdict: String = {
+            guard let bytes = chat.bytes else { return "还读不到\(chat.name)占了多少" }
+            return over ? "\(chat.name)占了 \(ByteFormat.string(bytes))，建议清理" : "\(chat.name)占了 \(ByteFormat.string(bytes))，暂时不用清"
+        }()
+        return VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(verdict).font(.system(size: 20, weight: .bold))
+                Text(chat.bytes == nil
+                     ? "在系统设置里给本应用开启「完全磁盘访问」，重新扫描后就能显示。"
+                     : "聊天记录只能在\(chat.name)里清理。一般先清缓存，不影响聊天记录；还不够再按聊天删大视频和文件。")
+                    .font(.system(size: 13)).foregroundStyle(Theme.ink2)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 10) {
                     if chat.bytes == nil {
-                        Label("没有读取权限，开启「完全磁盘访问」后才能显示", systemImage: "lock.fill")
-                            .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.amber)
-                    } else {
-                        Label(over ? "已超过 2 GB，建议清理" : "不到 2 GB，暂时不用清理", systemImage: over ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(over ? Theme.amber : Theme.green)
+                        Button { store.openFullDiskAccessSettings() } label: { Label("去开启权限", systemImage: "lock.open") }
+                            .buttonStyle(ToolbarButtonStyle(prominent: true, large: true))
                     }
+                    Button { store.openApp(bundleID: chat.id) } label: {
+                        Label("打开\(chat.name)", systemImage: "arrow.up.forward.app")
+                    }
+                    .buttonStyle(ToolbarButtonStyle(prominent: chat.bytes != nil, large: true))
+                    Button {
+                        withAnimation(.easeOut(duration: 0.18)) {
+                            if expanded { store.expandedGroups.remove(key) } else { store.expandedGroups.insert(key) }
+                        }
+                    } label: {
+                        Label(expanded ? "收起清理方法" : "查看清理方法", systemImage: expanded ? "chevron.up" : "chevron.down")
+                    }
+                    .buttonStyle(ToolbarButtonStyle(large: true))
                 }
-                Spacer(minLength: 8)
-                Button(action: toggle) {
-                    Label(expanded ? "收起" : "清理方法", systemImage: expanded ? "chevron.up" : "chevron.down")
-                        .labelStyle(.titleAndIcon)
-                }
-                .buttonStyle(ToolbarButtonStyle())
-                if chat.bytes == nil {
-                    Button("去开启权限") { store.openFullDiskAccessSettings() }.buttonStyle(ToolbarButtonStyle())
-                }
-                Button { store.openApp(bundleID: chat.id) } label: {
-                    Label("打开\(chat.name)", systemImage: "arrow.up.forward.app")
-                }
-                .buttonStyle(ToolbarButtonStyle(prominent: true))
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 14)
-            .contentShape(Rectangle())
-            .onTapGesture(perform: toggle)
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glass()
 
             if expanded {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("清理方法" + (version.map { "（\(chat.name) \($0)）" } ?? ""))
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Theme.ink2)
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("清理步骤").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink2)
+                        Spacer()
+                        Text(version.map { "按\(chat.name) \($0) 写的" } ?? "不同版本菜单位置可能略有不同")
+                            .font(.system(size: 11.5)).foregroundStyle(Theme.ink3)
+                    }
                     ForEach(Array(ChatGuide.steps(for: chat.id).enumerated()), id: \.offset) { index, step in
-                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
                             Text("\(index + 1)")
-                                .font(.system(size: 11.5, weight: .bold))
-                                .foregroundStyle(Theme.green)
-                                .frame(width: 20, height: 20)
-                                .background(Circle().fill(Theme.green.opacity(0.14)))
-                            Text(step).font(.system(size: 13.5))
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(tint)
+                                .frame(width: 22, height: 22)
+                                .background(Circle().fill(tint.opacity(0.14)))
+                            Text(step).font(.system(size: 13.5)).fixedSize(horizontal: false, vertical: true)
                         }
                     }
-                    Text("不同版本的菜单位置可能略有差别，以你正在用的版本为准。")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Theme.ink3)
-                    Text("哪些可以删").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink2).padding(.top, 6)
+                    Divider().padding(.vertical, 4)
+                    Text("哪些能删").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink2)
                     ForEach(ChatGuide.tips, id: \.text) { tip in
-                        HStack(spacing: 8) {
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
                             Image(systemName: tip.symbol)
                                 .foregroundStyle(tip.tint == "green" ? Theme.green : (tip.tint == "amber" ? Theme.amber : Theme.pink))
-                            Text(tip.text).foregroundStyle(Theme.ink)
+                            Text(tip.text).font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
                         }
-                        .font(.system(size: 13))
                     }
-                    Text("本应用不会改动\(chat.name)的任何数据。").font(.system(size: 12)).foregroundStyle(Theme.ink3).padding(.top, 4)
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 14)
+                .padding(20)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .overlay(alignment: .top) { Rectangle().fill(Theme.line).frame(height: 1) }
-                .transition(.opacity)
+                .glass()
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .glass()
     }
 
     private func creativeGroup(_ app: CreativeApp, items: [ScanItem]) -> some View {
@@ -1294,11 +1403,12 @@ struct MainView: View {
                 if let icon = ItemPresentation.appIcon(bundleID: app.bundleID) {
                     Image(nsImage: icon).resizable().frame(width: 40, height: 40)
                 } else {
-                    Image(systemName: "film.stack.fill").font(.system(size: 20)).foregroundStyle(Theme.pink).frame(width: 40, height: 40)
+                    IconTile(symbol: app.group.symbol, tint: groupTint(app.group), size: 40)
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(app.title).font(.system(size: 15.5, weight: .semibold))
-                    Text(app.hint).font(.system(size: 12)).foregroundStyle(Theme.ink3).lineLimit(1)
+                    Text(items.contains(where: \.canTrash) || app.cleanHow != nil ? app.hint : "\(app.group.dataNote)只统计、不删除，要清理请在\(app.shortName)里操作")
+                        .font(.system(size: 12)).foregroundStyle(Theme.ink2).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 8)
                 Text(ByteFormat.string(ScanStore.sum(items))).font(.system(size: 19, weight: .bold)).monospacedDigit()
@@ -1306,24 +1416,6 @@ struct MainView: View {
             .padding(.horizontal, 18)
             .padding(.vertical, 14)
             ForEach(items) { item in creativeRow(item, app: app) }
-            if items.contains(where: { !$0.canTrash }), !app.inAppSteps.isEmpty {
-                HStack(spacing: 6) {
-                    Text("在\(app.shortName)中：").foregroundStyle(Theme.ink2)
-                    ForEach(Array(app.inAppSteps.enumerated()), id: \.offset) { index, step in
-                        if index > 0 { Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.ink3) }
-                        Text(step)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
-                            .background(RoundedRectangle(cornerRadius: 5).fill(Theme.fill(0.08)))
-                    }
-                    Spacer(minLength: 0)
-                }
-                .font(.system(size: 12))
-                .padding(.leading, 70)
-                .padding(.trailing, 18)
-                .padding(.vertical, 12)
-                .overlay(alignment: .top) { Rectangle().fill(Theme.line).frame(height: 1) }
-            }
         }
         .glass()
     }
@@ -1347,8 +1439,8 @@ struct MainView: View {
                     .background(Capsule().fill(Theme.cyan.opacity(0.1)))
                     .overlay(Capsule().strokeBorder(Theme.cyan.opacity(0.3)))
             } else {
-                Button { store.openApp(bundleID: app.bundleID) } label: {
-                    Text("在\(app.shortName)中清理 ›")
+                Button { reveal(item) } label: {
+                    Text("查看位置")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Theme.amber)
                         .padding(.horizontal, 10)
@@ -1357,7 +1449,7 @@ struct MainView: View {
                         .overlay(Capsule().strokeBorder(Theme.amber.opacity(0.3)))
                 }
                 .buttonStyle(.plain)
-                .help("打开 \(app.title)")
+                .help("在访达中定位；本应用不删除此处数据")
             }
             Text(ByteFormat.string(item.bytes))
                 .font(.system(size: 14, weight: .medium))
@@ -1431,57 +1523,50 @@ struct MainView: View {
         let allSelected = inFilter.allSatisfy { store.selectedCleanupIDs.contains($0.id) }
         let empty = store.selectedCleanupItems.isEmpty
         let quit = store.appsToQuit
-        return HStack(spacing: 10) {
-            Button(allSelected ? "取消全选" : "全选") {
-                withAnimation(.easeOut(duration: 0.15)) { allSelected ? store.clearCleanupSelection() : store.selectAllEligible() }
-            }
-            .keyboardShortcut("a", modifiers: .command)
-            if store.filter == .caches {
-                Button("只选可重新生成的") {
-                    withAnimation(.easeOut(duration: 0.15)) { store.selectReusable() }
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                if store.isCleaning { ProgressView().controlSize(.small) }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(store.isCleaning
+                         ? "正在检查并移入废纸篓 \(store.cleanedCount)/\(store.selectedCleanupItems.count)"
+                         : empty ? "选择要清理的缓存" : "已选 \(store.selectedCleanupItems.count) 项 · \(ByteFormat.string(store.selectedCleanupBytes))")
+                        .font(.system(size: 14, weight: .semibold)).monospacedDigit()
+                    Text(empty ? "点击列表中的缓存即可选中，再核对路径。"
+                         : !quit.isEmpty ? "清理前请先退出 \(quit.joined(separator: "、"))"
+                         : "移入废纸篓后仍可恢复；清空后才会释放空间。")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(!quit.isEmpty ? Theme.amber : Theme.ink2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .help("选中 uv、npm、Codex 运行时这类缓存。清理它们不用退出任何应用，下次用到时会自动重新下载。")
+                Spacer(minLength: 0)
             }
-            Rectangle().fill(Theme.line).frame(width: 1, height: 24).padding(.horizontal, 4)
-            if store.isCleaning {
-                ProgressView().controlSize(.small)
-                Text("正在移入废纸篓 \(store.cleanedCount)/\(store.selectedCleanupItems.count)")
-                    .monospacedDigit()
-            } else {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(empty ? "点击任意一行即可选中" : "已选 \(store.selectedCleanupItems.count) 项 · \(ByteFormat.string(store.selectedCleanupBytes))")
-                        .font(.system(size: empty ? 13.5 : 15.5, weight: .semibold))
-                        .foregroundStyle(empty ? Theme.ink2 : Theme.ink)
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
-                    if !quit.isEmpty {
-                        Text("清理前请先退出 \(quit.prefix(3).joined(separator: "、"))\(quit.count > 3 ? " 等应用" : "")")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Theme.amber)
-                    } else if !empty {
-                        Text("这些缓存会自动重新生成，可以直接清理")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Theme.ink3)
+            HStack(spacing: 8) {
+                Button(allSelected ? "取消全选" : "全选") {
+                    withAnimation(.easeOut(duration: 0.15)) { allSelected ? store.clearCleanupSelection() : store.selectAllEligible() }
+                }
+                .keyboardShortcut("a", modifiers: .command)
+                if store.filter == .caches {
+                    Button("只选可再生缓存") {
+                        withAnimation(.easeOut(duration: 0.15)) { store.selectReusable() }
                     }
+                    .help("选择无需退出应用、下次使用时可重新生成或下载的缓存")
                 }
+                Spacer(minLength: 8)
+                Button("移入废纸篓…") {
+                    store.hoveredID = nil
+                    store.showTrashConfirmation = true
+                }
+                .buttonStyle(ToolbarButtonStyle(prominent: !empty, large: true))
+                .disabled(empty || store.isCleaning)
+                .opacity(empty ? 0.6 : 1)
             }
-            Spacer()
-            Button("移入废纸篓…") {
-                store.hoveredID = nil
-                store.showTrashConfirmation = true
-            }
-            .buttonStyle(ToolbarButtonStyle(prominent: true, large: true))
-            .disabled(empty || store.isCleaning)
-            .opacity(empty || store.isCleaning ? 0.45 : 1)
+            .buttonStyle(ToolbarButtonStyle())
+            .disabled(store.isCleaning)
         }
-        .buttonStyle(ToolbarButtonStyle())
-        .disabled(store.isCleaning)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .glass(radius: 22)
-        .padding(.horizontal, 26)
-        .padding(.top, 12)
-        .padding(.bottom, 14)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 14)
+        .background(Theme.panel)
+        .overlay(alignment: .top) { Rectangle().fill(Theme.line).frame(height: 1) }
     }
 
     private func cleanupReportBanner(_ report: CleanupReport) -> some View {
@@ -1494,10 +1579,15 @@ struct MainView: View {
                      : "没有项目被移动")
                     .font(.system(size: 13.5, weight: .semibold))
                 if report.movedCount > 0 {
-                    Text("清空废纸篓后才会真正释放空间").font(.system(size: 12.5)).foregroundStyle(Theme.ink3)
+                    Text("清空废纸篓后才会真正释放空间").font(.system(size: 12.5)).foregroundStyle(Theme.ink2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
-                Button { store.cleanupReport = nil } label: { Image(systemName: "xmark") }
+                Button { store.cleanupReport = nil } label: {
+                    Image(systemName: "xmark").font(.system(size: 12, weight: .semibold))
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(Theme.fill(0.07)))
+                }
                     .buttonStyle(.plain)
                     .foregroundStyle(Theme.ink3)
                     .help("关闭")
@@ -1515,7 +1605,7 @@ struct MainView: View {
                     }
                     .padding(.top, 6)
                 } label: {
-                    Text("\(report.failures.count) 项因系统不允许移动而跳过，其他项不受影响")
+                    Text("\(report.failures.count) 项未移动，请展开查看原因")
                         .font(.system(size: 12.5))
                         .foregroundStyle(Theme.ink2)
                 }
@@ -1561,7 +1651,6 @@ struct MainView: View {
                 .aspectRatio(contentMode: .fill)
                 .frame(width: size, height: size)
                 .clipShape(RoundedRectangle(cornerRadius: size * 0.225, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: size * 0.225, style: .continuous).strokeBorder(Theme.fill(0.15)))
         } else {
             Image(systemName: "externaldrive.fill.badge.checkmark")
                 .resizable()

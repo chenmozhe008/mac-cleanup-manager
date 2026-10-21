@@ -53,7 +53,8 @@ struct SafetyPolicy: Sendable {
     func isProject(_ url: URL) -> Bool {
         let ext = url.pathExtension.lowercased()
         if ["fcpbundle", "xcodeproj", "xcworkspace", "logicx", "band", "als",
-            "aep", "aepx", "blend", "blend1", "blend2", "drp", "dra", "fig"].contains(ext) {
+            "aep", "aepx", "blend", "blend1", "blend2", "drp", "dra", "fig",
+            "psd", "psb", "prproj", "ai", "aepx", "sesx", "lrcat", "lrcat-data"].contains(ext) {
             return true
         }
         let path = CanonicalPath.url(url).path
@@ -63,8 +64,13 @@ struct SafetyPolicy: Sendable {
     }
 
     func reviewDescription(for url: URL, isDirectory: Bool) -> String? {
-        guard isDirectory else { return nil }
+        guard isDirectory, !isProtected(url) else { return nil }
         let path = CanonicalPath.url(url).path
+        // Only the outermost folder of a recognized tool; its cleanable caches are listed separately.
+        if let app = CreativeApp.dataOwner(url, home: home), CreativeApp.cacheNote(url, home: home) == nil,
+           CreativeApp.dataOwner(url.deletingLastPathComponent(), home: home) != app || isProtected(url.deletingLastPathComponent()) {
+            return app.dataDescription
+        }
         // Only the outermost node_modules; nested ones are already counted inside it.
         if url.lastPathComponent == "node_modules", hasNodeManifest(near: url),
            !url.deletingLastPathComponent().path.contains("/node_modules") {
@@ -86,7 +92,9 @@ struct SafetyPolicy: Sendable {
     }
 
     func cacheDescription(for url: URL, isDirectory: Bool) -> String? {
-        guard isDirectory, !isProtected(url), !isProject(url) else { return nil }
+        guard isDirectory, !isProtected(url) else { return nil }
+        if let note = CreativeApp.cacheNote(url, home: home) { return note }
+        guard !isProject(url), CreativeApp.dataOwner(url, home: home) == nil else { return nil }
         let name = url.lastPathComponent
         let path = CanonicalPath.url(url).path
 
@@ -114,23 +122,14 @@ struct SafetyPolicy: Sendable {
         }
 
         let directCaches = [
-            (".cache/codex-runtimes", "Codex 的运行时缓存，下次使用时可能需要重新下载。"),
             (".cache/uv", "uv 的包缓存，下次安装依赖时可能需要重新下载。"),
             (".cache/pip", "pip 的包缓存，下次安装依赖时可能需要重新下载。"),
             (".npm/_cacache", "npm 的包缓存，下次安装依赖时可能需要重新下载。"),
-            ("Library/Application Support/Codex/Cache", "Codex 的界面缓存。清理前请先退出 Codex。"),
-            ("Library/Application Support/Codex/Code Cache", "Codex 的代码缓存。清理前请先退出 Codex。"),
-            ("Library/Application Support/Adobe/Common/Media Cache Files", "Adobe 的媒体缓存。清理前请先退出 Adobe 的应用。"),
-            ("Library/Application Support/Adobe/Common/Media Cache", "Adobe 的媒体缓存。清理前请先退出 Adobe 的应用。"),
-            ("Library/Application Support/Adobe/Common/Peak Files", "Adobe 的音频峰值缓存。清理前请先退出 Adobe 的应用。"),
             ("Library/Application Support/Notion/Partitions/notion/Cache", "Notion 的浏览器缓存。清理前请先退出 Notion。"),
             ("Library/Application Support/Notion/Partitions/notion/Code Cache", "Notion 的代码缓存。清理前请先退出 Notion。")
         ]
         if let match = directCaches.first(where: { path == home.appending(path: $0.0).path }) {
             return match.1
-        }
-        if name.hasPrefix("Disk Cache"), path.contains("/Library/Caches/Adobe/After Effects/") {
-            return "After Effects 的磁盘缓存。清理前请先退出 AE，也可以在 AE 的设置里清空。"
         }
 
         // Build artifacts inside projects. The source and the project root stay untouched.
@@ -152,27 +151,24 @@ struct SafetyPolicy: Sendable {
         let libraryCaches = home.appending(path: "Library/Caches")
         let cacheChildren = (try? FileManager.default.contentsOfDirectory(at: libraryCaches, includingPropertiesForKeys: [.isDirectoryKey])) ?? []
         let extra = [
-            ".cache/codex-runtimes", ".cache/uv", ".cache/pip", ".npm/_cacache",
+            ".cache/uv", ".cache/pip", ".npm/_cacache",
             "Library/Application Support/Codex/Cache", "Library/Application Support/Codex/Code Cache",
-            "Library/Application Support/Adobe/Common/Media Cache Files",
-            "Library/Application Support/Adobe/Common/Media Cache",
-            "Library/Application Support/Adobe/Common/Peak Files",
             "Library/Application Support/Notion/Partitions/notion/Cache",
             "Library/Application Support/Notion/Partitions/notion/Code Cache",
             "Library/Application Support/Notion/Partitions/notion/Service Worker"
         ].map { home.appending(path: $0) }
-        let aeRoot = home.appending(path: "Library/Caches/Adobe/After Effects")
-        let aeVersions = (try? FileManager.default.contentsOfDirectory(at: aeRoot, includingPropertiesForKeys: [.isDirectoryKey])) ?? []
-        let aeCaches = aeVersions.flatMap {
-            (try? FileManager.default.contentsOfDirectory(at: $0, includingPropertiesForKeys: [.isDirectoryKey])) ?? []
-        }.filter { $0.lastPathComponent.hasPrefix("Disk Cache") }
         let updaterRoot = home.appending(path: "Library/Application Support/Caches")
         let updaters = (try? FileManager.default.contentsOfDirectory(at: updaterRoot, includingPropertiesForKeys: [.isDirectoryKey])) ?? []
         let recordings = home.appending(path: "Library/Application Support/Shandianshuo/recordings")
-        return (cacheChildren + extra + aeCaches + updaters + [recordings]).filter {
+        let toolData = CreativeApp.dataLocations(home: home).filter { !isProtected($0) }
+        let locations = Set(cacheChildren + extra + updaters + [recordings] + toolData).filter {
             (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true &&
                 (cacheDescription(for: $0, isDirectory: true) != nil || reviewDescription(for: $0, isDirectory: true) != nil)
         }
+        // A parent owns its whole measured subtree; never scan/count the same data twice.
+        return locations.filter { child in
+            !locations.contains { parent in child != parent && child.path.hasPrefix(parent.path + "/") }
+        }.sorted { $0.path < $1.path }
     }
 
     func risk(for url: URL, kind: ScanKind) -> ScanRisk {

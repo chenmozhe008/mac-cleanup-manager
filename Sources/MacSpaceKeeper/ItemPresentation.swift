@@ -50,20 +50,42 @@ enum ItemPresentation {
     /// Short part name inside a creative app group, e.g. "磁盘缓存".
     static func partTitle(for item: ScanItem) -> String {
         let name = item.name
+        if name == "Render Files" { return "渲染文件 · \(item.url.deletingLastPathComponent().lastPathComponent)" }
+        if name == "CacheClip" { return "渲染缓存 CacheClip" }
+        if !item.canTrash { return "本地数据" }
         if name.hasPrefix("Disk Cache") { return "磁盘缓存" }
         if name.hasPrefix("Media Cache") { return "媒体缓存" }
         if name == "Peak Files" { return "音频峰值文件" }
-        if name == "Render Files" { return "渲染文件 · \(item.url.deletingLastPathComponent().lastPathComponent)" }
-        if name == "CacheClip" { return "渲染缓存 CacheClip" }
-        return "应用缓存"
+        if name == "DerivedDataCache" { return "引擎派生数据缓存" }
+        if name == "codex-runtimes" { return "运行时缓存" }
+        if ["Code Cache", "GPUCache", "CachedData", "CachedExtensionVSIXs"].contains(name) || name.hasSuffix("ShaderCache") || name.hasPrefix("Dawn") {
+            return "界面缓存 · \(name)"
+        }
+        return "缓存"
     }
 
     static func appIcon(bundleID: String) -> NSImage? {
+        guard !bundleID.isEmpty else { return nil }
         if let hit = appIcons[bundleID] { return hit }
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
         let icon = NSWorkspace.shared.icon(forFile: url.path)
         appIcons[bundleID] = icon
         return icon
+    }
+
+    static func runningOwner(of item: ScanItem) -> String? {
+        if let app = CreativeApp.of(item) {
+            let running = NSWorkspace.shared.runningApplications.first { running in
+                guard let id = running.bundleIdentifier else { return false }
+                return id == app.bundleID || app.apps.contains { id == $0 || id.hasPrefix($0 + ".") || (running.localizedName ?? "").hasPrefix($0) }
+            }
+            if let running { return running.localizedName ?? app.title }
+        }
+        let alias = aliases[item.name]?.bundleID
+        let applicationURL = alias.flatMap { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) }
+            ?? application(for: item.name)
+        guard let applicationURL, let identifier = Bundle(url: applicationURL)?.bundleIdentifier else { return nil }
+        return NSWorkspace.shared.runningApplications.first { $0.bundleIdentifier == identifier }?.localizedName
     }
 
     private static func resolve(_ item: ScanItem) -> Info {

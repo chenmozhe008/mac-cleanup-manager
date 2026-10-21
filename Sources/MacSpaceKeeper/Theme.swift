@@ -16,14 +16,16 @@ private func rgb(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat, _ a: CGFloat = 1) -> 
 
 /// Brand palette (mockup B, 2026-10-20), with a light variant (2026-10-21).
 enum Theme {
-    static let base = Color.adaptive(light: rgb(0.93, 0.94, 0.97), dark: rgb(0.043, 0.071, 0.149))
+    static let base = Color.adaptive(light: rgb(0.96, 0.97, 0.99), dark: rgb(0.065, 0.08, 0.12))
     static let ink = Color.adaptive(light: rgb(0.11, 0.11, 0.13), dark: rgb(0.91, 0.93, 0.99))
     static let ink2 = Color.adaptive(light: rgb(0.33, 0.35, 0.41), dark: rgb(0.66, 0.71, 0.84))
-    static let ink3 = Color.adaptive(light: rgb(0.52, 0.54, 0.6), dark: rgb(0.44, 0.49, 0.64))
+    static let ink3 = Color.adaptive(light: rgb(0.36, 0.40, 0.47), dark: rgb(0.68, 0.73, 0.82))
     /// Brighter secondary text used on selected / blue-tinted surfaces.
     static let softInk = Color.adaptive(light: rgb(0.1, 0.32, 0.75), dark: rgb(0.81, 0.88, 1.0))
     static let line = Color.adaptive(light: rgb(0, 0, 0, 0.08), dark: rgb(1, 1, 1, 0.08))
-    static let panel = Color.adaptive(light: rgb(1, 1, 1, 0.75), dark: rgb(1, 1, 1, 0.05))
+    static let panel = Color.adaptive(light: rgb(1, 1, 1, 0.94), dark: rgb(0.115, 0.14, 0.20, 0.96))
+    /// Used space outside the scanned categories in the disk ring.
+    static let usedTint = Color.adaptive(light: rgb(0.55, 0.64, 0.93), dark: rgb(0.40, 0.48, 0.80))
     static let track = Color.adaptive(light: rgb(0.78, 0.79, 0.83), dark: rgb(0.36, 0.43, 0.62))
     static let blue = Color.adaptive(light: rgb(0.04, 0.45, 1.0), dark: rgb(0.31, 0.55, 1.0))
     static let cyan = Color.adaptive(light: rgb(0.0, 0.55, 0.85), dark: rgb(0.22, 0.84, 1.0))
@@ -70,10 +72,10 @@ struct Backdrop: View {
         ZStack {
             // The desktop shows through faintly behind the brand gradient (macOS 26 Liquid Glass look).
             WindowBlur()
-            Theme.base.opacity(0.78)
-            RadialGradient(colors: [Color.adaptive(light: rgb(0.72, 0.8, 1.0, 0.6), dark: rgb(0.11, 0.23, 0.54, 0.85)), .clear],
+            Theme.base.opacity(0.97)
+            RadialGradient(colors: [Color.adaptive(light: rgb(0.72, 0.8, 1.0, 0.12), dark: rgb(0.11, 0.23, 0.54, 0.18)), .clear],
                            center: UnitPoint(x: 0.3, y: 0), startRadius: 0, endRadius: 760)
-            RadialGradient(colors: [Color.adaptive(light: rgb(0.85, 0.78, 1.0, 0.55), dark: rgb(0.23, 0.11, 0.54, 0.75)), .clear],
+            RadialGradient(colors: [Color.adaptive(light: rgb(0.85, 0.78, 1.0, 0.08), dark: rgb(0.23, 0.11, 0.54, 0.12)), .clear],
                            center: .bottomTrailing, startRadius: 0, endRadius: 620)
         }
         .ignoresSafeArea()
@@ -94,30 +96,13 @@ struct WindowBlur: NSViewRepresentable {
 }
 
 extension View {
-    /// Frosted panel; `highlighted` gives the blue glow used for the active card.
-    @ViewBuilder
+    /// Content surfaces keep a stable contrast in both appearances.
     func glass(radius: CGFloat = 14, highlighted: Bool = false) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        if #available(macOS 26.0, *) {
-            // Liquid Glass on macOS 26+; the active card gets a blue tint.
-            self
-                .glassEffect(highlighted ? .regular.tint(Theme.blue.opacity(0.35)) : .regular, in: shape)
-                .shadow(color: highlighted ? Theme.blue.opacity(0.4) : .clear, radius: 18, y: 10)
-        } else {
-            legacyGlass(shape: shape, highlighted: highlighted)
-        }
-    }
-
-    private func legacyGlass(shape: RoundedRectangle, highlighted: Bool) -> some View {
-        self
-            .background(
-                shape.fill(highlighted
-                           ? AnyShapeStyle(LinearGradient(colors: [Theme.blue.opacity(0.35), Theme.cyan.opacity(0.12)],
-                                                          startPoint: .topLeading, endPoint: .bottomTrailing))
-                           : AnyShapeStyle(Theme.panel))
-            )
-            .overlay(shape.strokeBorder(highlighted ? Theme.blue.opacity(0.5) : Theme.line, lineWidth: 1))
-            .shadow(color: highlighted ? Theme.blue.opacity(0.45) : .clear, radius: 18, y: 10)
+        return self
+            .background(shape.fill(Theme.panel))
+            .overlay(shape.fill(highlighted ? Theme.blue.opacity(0.08) : .clear).allowsHitTesting(false))
+            .overlay(shape.strokeBorder(highlighted ? Theme.blue.opacity(0.45) : Theme.line, lineWidth: 1))
     }
 }
 
@@ -150,9 +135,9 @@ struct CTAButtonStyle: ButtonStyle {
 struct LinkButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(Color(red: 0.81, green: 0.88, blue: 1.0).opacity(configuration.isPressed ? 0.6 : 1))
+            .foregroundStyle(Theme.blue.opacity(configuration.isPressed ? 0.6 : 1))
             .overlay(alignment: .bottom) {
-                Rectangle().fill(Color(red: 0.81, green: 0.88, blue: 1.0).opacity(0.4)).frame(height: 1).offset(y: 3)
+                Rectangle().fill(Theme.blue.opacity(0.4)).frame(height: 1).offset(y: 3)
             }
     }
 }
@@ -195,7 +180,7 @@ struct UsageRing: View {
 
     var body: some View {
         ZStack {
-            Circle().stroke(Theme.fill(0.07), lineWidth: lineWidth)
+            Circle().stroke(Theme.fill(0.08), lineWidth: lineWidth)
             ForEach(Array(placed.enumerated()), id: \.offset) { _, item in
                 Circle()
                     .trim(from: item.start, to: item.end)
@@ -226,25 +211,36 @@ struct ToolbarButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: large ? 14.5 : 13, weight: .semibold))
+            .font(.system(size: large ? 14 : 13, weight: .semibold))
             .labelStyle(.titleAndIcon)
+            .fixedSize(horizontal: true, vertical: false)
             .foregroundStyle(prominent ? Color.white : Theme.ink)
-            .padding(.horizontal, large ? 20 : 14)
+            .padding(.horizontal, large ? 18 : 12)
             .padding(.vertical, large ? 10 : 7)
-            .background(
-                Capsule()
-                    .fill(prominent ? AnyShapeStyle(LinearGradient(colors: [Color(red: 0.29, green: 0.64, blue: 1.0), Color(red: 0.04, green: 0.42, blue: 1.0)], startPoint: .top, endPoint: .bottom))
-                                    : AnyShapeStyle(Theme.fill(configuration.isPressed ? 0.16 : 0.1)))
-            )
-            .overlay(Capsule().strokeBorder(prominent ? Color.white.opacity(0.3) : Theme.fill(0.2)))
-            .overlay(alignment: .top) {
-                // Specular top edge, like system glass buttons.
-                Capsule().fill(LinearGradient(colors: [Color.white.opacity(prominent ? 0.35 : 0.18), .clear], startPoint: .top, endPoint: .center))
-                    .allowsHitTesting(false)
-            }
-            .shadow(color: prominent ? Theme.indigo.opacity(0.55) : .clear, radius: 10, y: 4)
-            .opacity(configuration.isPressed ? 0.85 : 1)
+            .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(prominent ? Theme.blue : Theme.fill(configuration.isPressed ? 0.12 : 0.05)))
+            .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(prominent ? .clear : Theme.line))
+            .opacity(configuration.isPressed ? 0.8 : 1)
             .contentShape(Rectangle())
+    }
+}
+
+/// The app icon at small size, without an extra tile behind it.
+struct SidebarBrandMark: View {
+    var size: CGFloat = 38
+    private static let icon = Bundle.main.url(forResource: "AppIcon-source", withExtension: "png").flatMap(NSImage.init(contentsOf:))
+
+    var body: some View {
+        Group {
+            if let icon = Self.icon {
+                Image(nsImage: icon).resizable().interpolation(.high)
+            } else {
+                Image(systemName: "externaldrive.fill.badge.checkmark").resizable().scaledToFit().padding(size * 0.2).foregroundStyle(Theme.blue)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: size * 0.225, style: .continuous))
+        .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
     }
 }
 
@@ -263,5 +259,47 @@ struct IconTile: View {
             )
             .overlay(Image(systemName: symbol).font(.system(size: size * 0.5, weight: .bold)).foregroundStyle(.white))
             .frame(width: size, height: size)
+    }
+}
+
+/// Wraps children onto new lines like text (chips).
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = arrange(width: proposal.width ?? .infinity, subviews: subviews)
+        let width = rows.map { $0.width }.max() ?? 0
+        let height = rows.reduce(0) { $0 + $1.height } + spacing * CGFloat(max(rows.count - 1, 0))
+        return CGSize(width: proposal.width ?? width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in arrange(width: bounds.width, subviews: subviews) {
+            var x = bounds.minX
+            for index in row.indices {
+                let size = subviews[index].sizeThatFits(.unspecified)
+                subviews[index].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+            y += row.height + spacing
+        }
+    }
+
+    private func arrange(width: CGFloat, subviews: Subviews) -> [(indices: [Int], width: CGFloat, height: CGFloat)] {
+        var rows: [(indices: [Int], width: CGFloat, height: CGFloat)] = []
+        var current: (indices: [Int], width: CGFloat, height: CGFloat) = ([], 0, 0)
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.unspecified)
+            let next = current.indices.isEmpty ? size.width : current.width + spacing + size.width
+            if next > width, !current.indices.isEmpty {
+                rows.append(current)
+                current = ([index], size.width, size.height)
+            } else {
+                current = (current.indices + [index], next, max(current.height, size.height))
+            }
+        }
+        if !current.indices.isEmpty { rows.append(current) }
+        return rows
     }
 }

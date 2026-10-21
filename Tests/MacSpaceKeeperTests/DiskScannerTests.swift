@@ -42,7 +42,7 @@ struct DiskScannerTests {
         let offline = root.appending(path: "Library/Application Support/Notion/Partitions/notion/Service Worker")
         for folder in [updater, offline] {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            try Data(repeating: 1, count: 32).write(to: folder.appending(path: "data"))
+            try writeSparse(folder.appending(path: "data"), bytes: 50_000_000)
         }
         let result = try DiskScanner(policy: SafetyPolicy(home: root)).scanKnownCaches()
         #expect(result.items.contains { $0.url.path == CanonicalPath.url(updater).path && $0.risk == .a && $0.canTrash })
@@ -56,7 +56,7 @@ struct DiskScannerTests {
         let dependencies = package.appending(path: "node_modules")
         try FileManager.default.createDirectory(at: dependencies, withIntermediateDirectories: true)
         try Data("{}".utf8).write(to: package.appending(path: "package.json"))
-        try Data(repeating: 1, count: 100).write(to: dependencies.appending(path: "data"))
+        try writeSparse(dependencies.appending(path: "data"), bytes: 50_000_000)
         let item = try #require(DiskScanner(policy: SafetyPolicy(home: root)).scan(root).items.first { $0.url.path == CanonicalPath.url(dependencies).path })
         #expect(item.kind == .review && item.risk == .c && !item.canTrash)
     }
@@ -70,14 +70,17 @@ struct DiskScannerTests {
         let resolveData = root.appending(path: "Library/Application Support/Blackmagic Design/DaVinci Resolve")
         for folder in [ae, blenderCache, figmaData, resolveData] {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            try Data(repeating: 1, count: 64).write(to: folder.appending(path: "data"))
+            try writeSparse(folder.appending(path: "data"), bytes: 200_000_000)
         }
         let policy = SafetyPolicy(home: root)
         let quick = try DiskScanner(policy: policy).scanKnownCaches()
-        #expect(Set(quick.items.map { $0.url.path }) == Set([ae, blenderCache].map { CanonicalPath.url($0).path }))
+        // Caches under ~/Library/Caches are cleanable; the editors' own data folders are read-only.
+        #expect(quick.items.contains { CreativeApp.of($0) == .afterEffects && $0.canTrash })
+        #expect(quick.items.contains { CreativeApp.of($0) == .blender && $0.canTrash })
+        #expect(quick.items.contains { CreativeApp.of($0) == .davinci && !$0.canTrash })
         let full = try DiskScanner(policy: policy).scan(root)
         for folder in [figmaData, resolveData] {
-            #expect(full.items.contains { $0.url.path == CanonicalPath.url(folder).path && $0.kind == .project && !$0.canTrash })
+            #expect(full.items.contains { $0.url.path == CanonicalPath.url(folder).path && !$0.canTrash })
         }
     }
 
@@ -88,7 +91,7 @@ struct DiskScannerTests {
         let resolve = root.appending(path: "CacheClip")
         for folder in [render, resolve] {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            try Data(repeating: 1, count: 96).write(to: folder.appending(path: "cache"))
+            try writeSparse(folder.appending(path: "cache"), bytes: 200_000_000)
         }
         let result = try DiskScanner(policy: SafetyPolicy(home: root)).scan(root)
         for folder in [render, resolve] {
@@ -130,6 +133,7 @@ struct DiskScannerTests {
         try FileManager.default.createDirectory(at: build, withIntermediateDirectories: true)
         try Data("// fixture".utf8).write(to: root.appending(path: "Demo/Package.swift"))
         try Data(repeating: 1, count: 128).write(to: build.appending(path: "object.o"))
+        try writeSparse(project.appending(path: "project-data"), bytes: 200_000_000)
 
         let store = ScanStore()
         store.result = try DiskScanner(policy: SafetyPolicy(home: root)).scan(root)
@@ -180,7 +184,7 @@ struct DiskScannerTests {
         try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
         try Data("// swift".utf8).write(to: project.appending(path: "Package.swift"))
         try Data(repeating: 1, count: 200).write(to: cache.appending(path: "object.o"))
-        try Data(repeating: 2, count: 300).write(to: bundle.appending(path: "CurrentVersion.flexolibrary"))
+        try writeSparse(bundle.appending(path: "CurrentVersion.flexolibrary"), bytes: 200_000_000)
 
         let result = try DiskScanner(policy: SafetyPolicy(home: root)).scan(root)
         #expect(result.items.contains { $0.url.path == CanonicalPath.url(cache).path && $0.canTrash })
@@ -204,6 +208,7 @@ struct DiskScannerTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let bundle = root.appending(path: "Important.fcpbundle")
         try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
+        try writeSparse(bundle.appending(path: "project-data"), bytes: 200_000_000)
         let item = try #require(DiskScanner(policy: SafetyPolicy(home: root)).scan(root).items.first { $0.url.path == CanonicalPath.url(bundle).path })
         #expect(throws: TrashError.self) { try TrashService(policy: SafetyPolicy(home: root)).moveToTrash(item) }
         #expect(FileManager.default.fileExists(atPath: bundle.path))
@@ -247,4 +252,11 @@ private final class ProgressRecorder: @unchecked Sendable {
         defer { lock.unlock() }
         return counts
     }
+}
+
+func writeSparse(_ url: URL, bytes: UInt64) throws {
+    FileManager.default.createFile(atPath: url.path, contents: Data())
+    let handle = try FileHandle(forWritingTo: url)
+    defer { try? handle.close() }
+    try handle.truncate(atOffset: bytes)
 }

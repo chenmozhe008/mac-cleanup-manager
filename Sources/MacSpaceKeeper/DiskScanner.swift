@@ -8,6 +8,8 @@ struct DiskScanner: Sendable {
     let minProjectBytes: Int64 = 200_000_000
     /// "需要判断" items below this are not worth a decision.
     let minReviewBytes: Int64 = 50_000_000
+    /// A recognized tool's read-only data below this is not worth a row.
+    let minToolDataBytes: Int64 = 1_000_000
     /// Called for every item as it is found, so the scanning screen can show live discoveries.
     var onFound: (@Sendable (ScanItem) -> Void)?
 
@@ -83,10 +85,12 @@ struct DiskScanner: Sendable {
             return metadata.size
         }
 
-        let project = policy.isProject(url)
-        // Skip caches we could not move anyway (root-owned or system-protected), so they never reach the cleanup list.
-        let cacheNote = !insideProject && isMovable(url) ? policy.cacheDescription(for: url, isDirectory: true) : nil
         let reviewNote = policy.reviewDescription(for: url, isDirectory: true)
+        let project = reviewNote == nil && policy.isProject(url)
+        // Skip caches we could not move anyway (root-owned or system-protected), so they never reach the cleanup list.
+        // A recognized tool's own caches stay cleanable inside its otherwise read-only folder.
+        let toolCache = !policy.isProtected(url) && CreativeApp.cacheNote(url, home: policy.home) != nil
+        let cacheNote = (!insideProject || toolCache) && isMovable(url) ? policy.cacheDescription(for: url, isDirectory: true) : nil
         let children: [URL]
         if let allowedProtectedChildren {
             children = allowedProtectedChildren.filter { FileManager.default.fileExists(atPath: $0.path) }
@@ -101,7 +105,7 @@ struct DiskScanner: Sendable {
         }
         var sum: Int64 = 0
         for child in children {
-            let value = try walk(child, root: root, rootDevice: rootDevice, depth: depth + 1, insideProject: insideProject || project, items: &items, skipped: &skipped, scanned: &scanned, onProgress: onProgress)
+            let value = try walk(child, root: root, rootDevice: rootDevice, depth: depth + 1, insideProject: insideProject || project || reviewNote != nil, items: &items, skipped: &skipped, scanned: &scanned, onProgress: onProgress)
             let addition = sum.addingReportingOverflow(value)
             sum = addition.overflow ? Int64.max : addition.partialValue
         }
@@ -117,10 +121,18 @@ struct DiskScanner: Sendable {
                     if old.count > 0 {
                         emit(&items, item(url, kind: .review, bytes: old.bytes, note: "超过 15 天的录音 \(old.count) 条。\(reviewNote)", canTrash: false, identity: metadata.identity))
                     }
-                } else if sum >= minReviewBytes || CreativeApp.isReviewCache(url) {
-                    emit(&items, item(url, kind: .review, bytes: sum, note: reviewNote, canTrash: false, identity: metadata.identity))
+                } else {
+                    // Caches found inside are listed on their own; the read-only row counts the rest.
+                    let prefix = url.path + "/"
+                    let cached = items.filter { $0.kind == .cache && $0.url.path.hasPrefix(prefix) }.reduce(Int64(0)) { $0 + $1.bytes }
+                    let remaining = max(sum - cached, 0)
+                    let tool = CreativeApp.dataOwner(url, home: policy.home) != nil
+                    if remaining >= (tool ? minToolDataBytes : minReviewBytes) || CreativeApp.isReviewCache(url) {
+                        items.removeAll { $0.kind != .cache && $0.url.path.hasPrefix(prefix) }
+                        emit(&items, item(url, kind: .review, bytes: remaining, note: reviewNote, canTrash: false, identity: metadata.identity))
+                    }
                 }
-            } else if let cacheNote {
+            } else if let cacheNote, sum > 0 {
                 // Hide descendants of a suggested cache to avoid overlapping actions.
                 items.removeAll { $0.url.path.hasPrefix(url.path + "/") }
                 emit(&items, item(url, kind: .cache, bytes: sum, note: cacheNote, canTrash: true, identity: metadata.identity))
