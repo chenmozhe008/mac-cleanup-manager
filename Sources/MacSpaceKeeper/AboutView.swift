@@ -191,6 +191,29 @@ struct AboutView: View {
                     .font(.system(size: 14.5)).foregroundStyle(Theme.ink2)
                     .lineSpacing(5)
                     .fixedSize(horizontal: false, vertical: true)
+                // Open source is a reason to trust a cleaner; make the repository the obvious next click.
+                Button { NSWorkspace.shared.open(AppInfo.repository) } label: {
+                    HStack(spacing: 12) {
+                        IconTile(symbol: "chevron.left.forwardslash.chevron.right", tint: Color(red: 0.14, green: 0.16, blue: 0.2), size: 34)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("代码完全开源").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.ink)
+                            Text("github.com/chenmozhe008/mac-cleanup-manager").font(.system(size: 12)).foregroundStyle(Theme.ink2)
+                        }
+                        Spacer(minLength: 8)
+                        Label("在 GitHub 查看", systemImage: "arrow.up.right")
+                            .labelStyle(.titleAndIcon)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(Theme.blue))
+                    }
+                    .padding(12)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.fill(0.06)))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 6)
             }
             .padding(22)
             .frame(maxWidth: .infinity, alignment: .leading)
