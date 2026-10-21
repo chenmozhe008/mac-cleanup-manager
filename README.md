@@ -1,10 +1,25 @@
+<div align="center">
+
+<img src="docs/images/icon.png" width="128" alt="Mac 清理管家图标">
+
 # Mac 清理管家
 
-**AI 时代的 Mac 清理工具。**
+**AI 时代的 Mac 清理工具**
+
+认得 Cursor、Claude Code、Codex、剪映、达芬奇……缓存帮你清掉，工程、对话和模型原样留着。
+
+![License: MIT](https://img.shields.io/badge/license-MIT-blue)
+![Platform](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)
+![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-555)
+![SwiftUI](https://img.shields.io/badge/SwiftUI-native-orange?logo=swift)
+
+<img src="docs/images/overview-light.png" alt="总览（浅色）" width="900">
+
+</div>
 
 AI 工具和创作软件每天都在 Mac 上留下运行时、缓存和模型，动不动就是几个 GB。传统清理工具分不清哪些能重新生成、哪些是你的对话和作品。Mac 清理管家看得懂它们：能重新生成的帮你清掉，工程、对话和模型原样留着。
 
-原生 SwiftUI 应用，支持浅色 / 深色，macOS 26 上使用系统液态玻璃。
+原生 SwiftUI 应用，浅色 / 深色自动切换，macOS 26 上使用系统液态玻璃。
 
 ## 它的优势
 
@@ -12,6 +27,16 @@ AI 工具和创作软件每天都在 Mac 上留下运行时、缓存和模型，
 - **也懂影视创作**：认得剪映、达芬奇、After Effects、Premiere、Final Cut、Blender 等剪辑和设计软件。剪映缓存、AE 磁盘缓存、Adobe 媒体缓存可以直接清；达芬奇、Final Cut 的渲染缓存告诉你在软件里怎么清；工程、草稿和素材不碰。
 - **先确认，再清理**：每一项写明是什么、能不能删、为什么。勾选确认后才放进废纸篓，删错了随时拖回来；正在使用的文件自动跳过；不会替你清空废纸篓。
 - **代码开源，跟得上新工具**：哪些会清、哪些不碰，规则都在代码里。不联网、不上传，扫描结果只留在你的 Mac 上。
+
+## 截图
+
+| 创作与 AI 工具：按工具区分缓存和作品 | 微信与企业微信：看占用，教你在微信里清 |
+| --- | --- |
+| <img src="docs/images/tools.png" alt="创作与 AI 工具"> | <img src="docs/images/wechat.png" alt="微信与企业微信"> |
+| **扫描中：边扫边显示发现的内容** | **深色模式** |
+| <img src="docs/images/scan.png" alt="扫描中"> | <img src="docs/images/overview-dark.png" alt="深色模式"> |
+
+<p align="center"><img src="docs/images/about.png" alt="关于" width="720"></p>
 
 ## 能看到什么
 
