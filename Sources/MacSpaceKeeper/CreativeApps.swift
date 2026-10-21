@@ -343,6 +343,14 @@ enum ChatGuide {
         }
     }
 
+    /// One- or two-word labels for the step strip; the full sentences open on demand.
+    static func shortSteps(for bundleID: String) -> [String] {
+        switch bundleID {
+        case "com.tencent.xinWeChat": ["左下角 ≡", "设置", "存储空间", "清理缓存", "管理大文件"]
+        default: ["头像", "设置", "通用 → 存储空间", "清理缓存", "删大文件"]
+        }
+    }
+
     static let tips: [(symbol: String, tint: String, text: String)] = [
         ("checkmark.circle.fill", "green", "缓存：清理后会自动重新下载，不影响聊天记录，可以放心清"),
         ("exclamationmark.circle.fill", "amber", "聊天里的视频和文件：删除后无法恢复，删之前请确认已经另存"),

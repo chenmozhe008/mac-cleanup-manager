@@ -131,7 +131,7 @@ struct AboutView: View {
             SidebarBrandMark()
             VStack(alignment: .leading, spacing: 6) {
                 Text("关于 Mac 清理管家").font(.system(size: 22, weight: .bold))
-                Text("v\(AppInfo.version) · 作者 \(AppInfo.author) · 为视频与内容创作者整理磁盘空间")
+                Text("v\(AppInfo.version) · 作者 \(AppInfo.author) · 为 AI 编程和影视创作整理磁盘空间")
                     .font(.system(size: 13)).foregroundStyle(Theme.ink2)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -170,19 +170,21 @@ struct AboutView: View {
 
     // MARK: Intro
 
+    /// Order the user asked for: what it is → the two strengths → comparison.
     private var intro: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 28) {
             HStack(alignment: .center, spacing: 24) {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("为影视与 AI 创作而做")
-                        .font(.system(size: 12, weight: .semibold)).tracking(2)
-                        .foregroundStyle(Color.white.opacity(0.8))
+                    Text("给 AI 编程和影视创作的人")
+                        .font(.system(size: 13, weight: .semibold)).tracking(1.5)
+                        .foregroundStyle(Color.white.opacity(0.85))
                     Text("留住作品，\n腾出创作空间。")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
                         .lineSpacing(4).foregroundStyle(.white)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("看清空间用在哪里，让每一次清理都有依据。")
-                        .font(.system(size: 14)).foregroundStyle(Color.white.opacity(0.9))
+                    Text("扫一遍就知道空间花在哪：AI 工具的运行缓存、剪辑软件的渲染缓存、微信占了多少，一眼看清。")
+                        .font(.system(size: 14)).foregroundStyle(Color.white.opacity(0.92))
+                        .lineSpacing(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
@@ -199,54 +201,60 @@ struct AboutView: View {
                 .accessibilityHidden(true)
             }
             .padding(.horizontal, 26)
-            .padding(.vertical, 20)
+            .padding(.vertical, 22)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(LinearGradient(colors: [Color(red: 0.08, green: 0.24, blue: 0.57), Color(red: 0.15, green: 0.19, blue: 0.40)], startPoint: .topLeading, endPoint: .bottomTrailing))
             .clipShape(RoundedRectangle(cornerRadius: 16))
 
-            HStack(alignment: .top, spacing: 24) {
-                advantage("01", "认识你的工具", "国内外 \(CreativeApp.allCases.count) 款剪辑、设计和 AI 工具，按扫描到的实际占用显示。", "square.stack.3d.up", Theme.blue)
-                advantage("02", "看懂每一项", "软件名称、占用大小、准确位置与处理边界放在一起，不用猜文件夹能不能删。", "text.magnifyingglass", Theme.violet)
-                advantage("03", "清理前再确认", "普通缓存先核对路径与文件占用，确认后放入废纸篓；无法确认就跳过。", "checklist", Theme.green)
-            }
-
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: "lock.shield.fill").font(.system(size: 26)).foregroundStyle(Theme.green)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("工程、素材、模型和对话，保留在你手里。")
-                        .font(.system(size: 15, weight: .semibold))
-                    Text("识别到的工程、模型和对话只统计、不删除；能清的只有会自动重新生成的缓存。也不会替你清空废纸篓。")
-                        .font(.system(size: 13)).foregroundStyle(Theme.ink2)
-                        .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 14) {
+                Text("最大的两个优点").font(.system(size: 18, weight: .bold))
+                HStack(alignment: .top, spacing: 16) {
+                    advantage("1", "懂 AI 编程和影视创作", "chevron.left.forwardslash.chevron.right", Theme.blue,
+                              "认得 \(CreativeApp.allCases.count) 款国内外工具，知道哪些是能清的缓存，哪些是你的工程、草稿和对话。缓存帮你清，作品一个不碰。",
+                              ["Cursor", "Claude Code", "Codex", "Trae", "剪映", "达芬奇", "AE", "ComfyUI"])
+                    advantage("2", "先确认，再清理", "checkmark.shield.fill", Theme.green,
+                              "每一项都写明是什么、能不能删。你勾选确认后才放进废纸篓，删错了随时拖回来；正在用的文件会自动跳过。",
+                              ["逐项确认", "进废纸篓可找回", "正在用的不动"])
                 }
-                Spacer(minLength: 0)
+                .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(18)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Theme.green.opacity(0.08)))
 
-            VStack(alignment: .leading, spacing: 12) {
-                Text("和其他清理工具比一比").font(.system(size: 17, weight: .semibold))
+            VStack(alignment: .leading, spacing: 14) {
+                Text("和其他清理工具比一比").font(.system(size: 18, weight: .bold))
                 comparisonTable
                 Text("资料整理于 2026 年 10 月，价格和功能以各产品官方说明为准。")
-                    .font(.system(size: 11.5)).foregroundStyle(Theme.ink3)
+                    .font(.system(size: 13)).foregroundStyle(Theme.ink2)
             }
-            Text(AppInfo.requirements).font(.system(size: 12)).foregroundStyle(Theme.ink2)
+
+            Label(AppInfo.requirements, systemImage: "laptopcomputer")
+                .font(.system(size: 13)).foregroundStyle(Theme.ink2)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    private func advantage(_ number: String, _ title: String, _ description: String, _ symbol: String, _ tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Image(systemName: symbol).font(.system(size: 22)).foregroundStyle(tint).frame(height: 28)
-                Spacer()
-                Text(number).font(.system(size: 12, weight: .semibold, design: .monospaced)).foregroundStyle(Theme.ink3)
+    private func advantage(_ number: String, _ title: String, _ symbol: String, _ tint: Color, _ description: String, _ tags: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                IconTile(symbol: symbol, tint: tint, size: 36)
+                Text(title).font(.system(size: 18, weight: .bold))
             }
-            Text(title).font(.system(size: 17, weight: .semibold))
-            Text(description).font(.system(size: 13)).foregroundStyle(Theme.ink2)
-                .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
+            Text(description)
+                .font(.system(size: 14)).foregroundStyle(Theme.ink2)
+                .lineSpacing(4).fixedSize(horizontal: false, vertical: true)
+            FlowLayout(spacing: 6) {
+                ForEach(tags, id: \.self) { tag in
+                    Text(tag)
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(tint)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(tint.opacity(0.1)))
+                }
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .padding(20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .glass(radius: 14)
     }
 
     private var comparisonTable: some View {
@@ -270,9 +278,9 @@ struct AboutView: View {
                 if rowIndex > 0 { Rectangle().fill(Theme.line).frame(height: 1).gridCellUnsizedAxes(.horizontal) }
                 GridRow {
                     Text(row.title)
-                        .font(.system(size: 12.5, weight: .semibold))
+                        .font(.system(size: 13.5, weight: .semibold))
                         .foregroundStyle(Theme.ink2)
-                        .frame(width: 104, alignment: .leading)
+                        .frame(width: 110, alignment: .leading)
                         .padding(.vertical, 12)
                         .frame(maxHeight: .infinity, alignment: .center)
                     ForEach(Array(row.cells.enumerated()), id: \.offset) { index, cell in
@@ -303,7 +311,7 @@ struct AboutView: View {
             // Keep text on the same line across a row whether or not the cell has a mark.
             Image(systemName: symbol ?? "circle").font(.system(size: 15)).foregroundStyle(tint).opacity(symbol == nil ? 0 : 1)
             Text(cell.text)
-                .font(.system(size: 12, weight: ours ? .semibold : .regular))
+                .font(.system(size: 13, weight: ours ? .semibold : .regular))
                 .foregroundStyle(ours ? Theme.ink : (cell.mark == .none ? Theme.ink3 : Theme.ink2))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
