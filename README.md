@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="docs/images/icon.png" width="128" alt="Mac 清理管家图标">
+<img src="docs/images/icon.png" width="128" alt="小清图标">
 
-# Mac 清理管家
+# 小清 Qingo
 
 **AI 时代的 Mac 清理工具**
 
@@ -17,7 +17,7 @@
 
 </div>
 
-AI 工具和创作软件每天都在 Mac 上留下运行时、缓存和模型，动不动就是几个 GB。传统清理工具分不清哪些能重新生成、哪些是你的对话和作品。Mac 清理管家看得懂它们：能重新生成的帮你清掉，工程、对话和模型原样留着。
+AI 工具和创作软件每天都在 Mac 上留下运行时、缓存和模型，动不动就是几个 GB。传统清理工具分不清哪些能重新生成、哪些是你的对话和作品。小清看得懂它们：能重新生成的帮你清掉，工程、对话和模型原样留着。
 
 原生 SwiftUI 应用，浅色 / 深色自动切换，macOS 26 上使用系统液态玻璃。
 
@@ -57,9 +57,9 @@ AI 工具和创作软件每天都在 Mac 上留下运行时、缓存和模型，
 目前没有预编译安装包，需要自己构建（需要 Xcode 或 Swift 命令行工具）：
 
 ```sh
-git clone https://github.com/chenmozhe008/mac-cleanup-manager.git
-cd mac-cleanup-manager
-./script/build_and_run.sh --package   # 生成 dist/Mac 清理管家.app
+git clone https://github.com/chenmozhe008/qingo.git
+cd qingo
+./script/build_and_run.sh --package   # 生成 dist/小清.app
 ./script/test.sh                      # 运行测试
 ```
 
@@ -67,7 +67,7 @@ cd mac-cleanup-manager
 
 ## 加一个新工具
 
-工具清单在 [`Sources/MacSpaceKeeper/CreativeApps.swift`](Sources/MacSpaceKeeper/CreativeApps.swift)。每个工具一行：
+工具清单在 [`Sources/Qingo/CreativeApps.swift`](Sources/Qingo/CreativeApps.swift)。每个工具一行：
 
 - `folders`：它在 `~/Library/Application Support` 和 `~/Library/Caches` 下的文件夹名
 - `roots`：它在用户目录下的数据目录（只统计，不删除）
@@ -84,7 +84,7 @@ cd mac-cleanup-manager
 
 ## 反馈
 
-- [GitHub Issues](https://github.com/chenmozhe008/mac-cleanup-manager/issues)
+- [GitHub Issues](https://github.com/chenmozhe008/qingo/issues)
 - 邮件：327529709@qq.com
 
 更新记录见 [CHANGELOG.md](CHANGELOG.md)。
@@ -92,3 +92,5 @@ cd mac-cleanup-manager
 ## 许可证
 
 [MIT](LICENSE) © 沉默者之二
+
+> 小清原名「Mac 清理管家」，1.1.0 起改名。

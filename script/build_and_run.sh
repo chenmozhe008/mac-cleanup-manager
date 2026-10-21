@@ -2,11 +2,11 @@
 set -euo pipefail
 
 MODE="${1:-run}"
-APP_NAME="Mac 清理管家"
-EXECUTABLE_NAME="MacSpaceKeeper"
-BUNDLE_ID="com.forwardyan.MacSpaceKeeper"
+APP_NAME="小清"
+EXECUTABLE_NAME="Qingo"
+BUNDLE_ID="io.github.chenmozhe008.qingo"
 MIN_SYSTEM_VERSION="14.0"
-APP_VERSION="1.0.4"
+APP_VERSION="1.1.0"
 CODESIGN_IDENTITY="${CODESIGN_IDENTITY:-Apple Development}"
 # Without that certificate (e.g. a fresh clone), fall back to ad-hoc signing so the build still runs locally.
 if [[ "$CODESIGN_IDENTITY" != "-" ]] && ! security find-identity -v -p codesigning 2>/dev/null | grep -q "$CODESIGN_IDENTITY"; then
@@ -46,7 +46,7 @@ cat >"$APP_BUNDLE/Contents/Info.plist" <<PLIST
   <key>CFBundleIconFile</key><string>AppIcon.icns</string>
   <key>CFBundleShortVersionString</key><string>$APP_VERSION</string>
   <key>CFBundleVersion</key><string>$BUILD_NUMBER</string>
-  <key>NSHumanReadableCopyright</key><string>作者 @沉默者之二 · 反馈 327529709@qq.com</string>
+  <key>NSHumanReadableCopyright</key><string>小清 Qingo，作者 @沉默者之二，MIT 开源</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>LSMinimumSystemVersion</key><string>$MIN_SYSTEM_VERSION</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>

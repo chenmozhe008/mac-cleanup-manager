@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import MacSpaceKeeper
+@testable import Qingo
 
 struct DiskScannerTests {
     @Test func largeInstallerIsManualReview() throws {

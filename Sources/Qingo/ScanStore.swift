@@ -387,7 +387,7 @@ final class ScanStore: ObservableObject {
 
     private var resultsDirectory: URL {
         let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appending(path: "MacSpaceKeeper/results")
+            .appending(path: "Qingo/results")
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
     }
@@ -535,6 +535,35 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
         case .system: application.appearance = nil
         case .light: application.appearance = NSAppearance(named: .aqua)
         case .dark: application.appearance = NSAppearance(named: .darkAqua)
+        }
+    }
+}
+
+
+/// One-time carry-over from the app's previous identity (Mac 清理管家, com.forwardyan.MacSpaceKeeper):
+/// settings, saved folders and per-location results, so renaming does not look like a reset.
+enum LegacyMigration {
+    private static let doneKey = "migratedFromMacSpaceKeeper"
+    private static let keys = ["appearance", "savedFolders", "scanSizes", "lastFilter", "lastScope", "scanDates"]
+
+    static func run() {
+        let defaults = UserDefaults.standard
+        if !defaults.bool(forKey: doneKey) {
+            defaults.set(true, forKey: doneKey)
+            if let old = UserDefaults(suiteName: "com.forwardyan.MacSpaceKeeper") {
+                for key in keys where defaults.object(forKey: key) == nil {
+                    if let value = old.object(forKey: key) { defaults.set(value, forKey: key) }
+                }
+            }
+        }
+        // Results: copy any location the new folder does not have yet (the folder itself may already exist).
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let oldResults = support.appending(path: "MacSpaceKeeper/results")
+        let newResults = support.appending(path: "Qingo/results")
+        guard let files = try? FileManager.default.contentsOfDirectory(at: oldResults, includingPropertiesForKeys: nil) else { return }
+        try? FileManager.default.createDirectory(at: newResults, withIntermediateDirectories: true)
+        for file in files where !FileManager.default.fileExists(atPath: newResults.appending(path: file.lastPathComponent).path) {
+            try? FileManager.default.copyItem(at: file, to: newResults.appending(path: file.lastPathComponent))
         }
     }
 }

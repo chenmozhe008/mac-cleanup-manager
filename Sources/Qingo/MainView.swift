@@ -359,7 +359,7 @@ struct MainView: View {
             HStack(spacing: 10) {
                 brandIcon(38).shadow(color: .black.opacity(0.12), radius: 3, y: 1)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Mac 清理管家").font(.system(size: 14.5, weight: .semibold))
+                    Text("小清").font(.system(size: 15, weight: .semibold))
                     Text("扫描只读，清理前确认").font(.system(size: 11.5)).foregroundStyle(Theme.ink3)
                 }
             }

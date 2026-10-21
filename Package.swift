@@ -2,11 +2,11 @@
 import PackageDescription
 
 let package = Package(
-    name: "MacSpaceKeeper",
+    name: "Qingo",
     platforms: [.macOS(.v14)],
-    products: [.executable(name: "MacSpaceKeeper", targets: ["MacSpaceKeeper"])],
+    products: [.executable(name: "Qingo", targets: ["Qingo"])],
     targets: [
-        .executableTarget(name: "MacSpaceKeeper", path: "Sources/MacSpaceKeeper"),
-        .testTarget(name: "MacSpaceKeeperTests", dependencies: ["MacSpaceKeeper"])
+        .executableTarget(name: "Qingo", path: "Sources/Qingo"),
+        .testTarget(name: "QingoTests", dependencies: ["Qingo"])
     ]
 )

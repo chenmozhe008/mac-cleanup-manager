@@ -2,14 +2,18 @@ import AppKit
 import SwiftUI
 
 @main
-struct MacSpaceKeeperApp: App {
+struct QingoApp: App {
     @StateObject private var store = ScanStore()
+
+    init() {
+        LegacyMigration.run()
+    }
 
     // The Dock uses the bundle's AppIcon.icns. Setting applicationIconImage at runtime
     // bypasses the system squircle mask and shows a raw square.
 
     var body: some Scene {
-        WindowGroup("Mac 清理管家") {
+        WindowGroup("小清") {
             MainView(store: store)
                 .frame(minWidth: 960, minHeight: 640)
         }
@@ -18,7 +22,7 @@ struct MacSpaceKeeperApp: App {
         .commands {
             CommandGroup(replacing: .newItem) { }
             CommandGroup(replacing: .appInfo) {
-                Button("关于 Mac 清理管家") { store.showAbout = true }
+                Button("关于小清") { store.showAbout = true }
             }
             CommandMenu("外观") {
                 Picker("外观", selection: $store.appearance) {

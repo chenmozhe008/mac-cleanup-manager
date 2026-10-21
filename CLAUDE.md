@@ -1,11 +1,15 @@
-# Mac 清理管家（MacSpaceKeeper）
+# 小清 Qingo（原名 Mac 清理管家 / MacSpaceKeeper）
 
 原生 SwiftUI 磁盘扫描/缓存清理 App。功能说明看 README.md。
+
+- 名字（2026-10-21 用户定）：中文「小清」、英文「Qingo」；名字里不带 Mac（以后可能做 Windows）。图标暂不改（出过三版方案，用户选择先保留，稿在 `output/mockups/qingo-icon/`）
+- 身份：Swift 模块/可执行文件 `Qingo`，bundle id `io.github.chenmozhe008.qingo`；旧身份 `com.forwardyan.MacSpaceKeeper` 的设置和 `Application Support/MacSpaceKeeper/results` 由 `LegacyMigration` 带过来，别删
+- 分发：走 GitHub Releases（以后再做公证），**不上 Mac App Store**（沙盒读不了 ~/Library 和其他应用目录，核心功能会废）
 
 ## 版本与发布
 
 - 版本号写在 `script/build_and_run.sh` 的 `APP_VERSION`，构建号取 git 提交数；改版本时同步在 `CHANGELOG.md` 顶部加一节（App「关于」页直接读这个文件，别另写一份）
-- 作者 @沉默者之二、反馈邮箱在 `AboutView.swift` 的 `AppInfo`；「关于」三页（介绍 / 更新记录 / 反馈）。标题区＝App 图标 +「Mac 清理管家」+ 版本作者；介绍页顺序：介绍卡（标题「AI 时代的 Mac 清理工具」无句号 + 一段说明，不以具体工具名开头）→ 优势（三张卡）→ 对比与说明。定位（2026-10-21 用户定）：**AI 时代的清理工具**，AI Coding 是主卖点、影视创作是加分（只是排序，界面上不写「加分项」）；措辞用「AI Coding」不用「AI 编程」；不写具体识别了多少款（写「主流工具」）；不对竞品下没查证的断言；正文字号不小于 13；竞品对比数据在 `Comparison`（2026-10-21 查官网与评测，查不到的格子写「—」，别凭印象补；界面上不写这类内部说明）
+- 作者 @沉默者之二、反馈邮箱在 `AboutView.swift` 的 `AppInfo`；「关于」三页（介绍 / 更新记录 / 反馈）。标题区＝App 图标 +「小清 Qingo」+ 版本作者 + GitHub 按钮；介绍卡里有醒目的「代码完全开源」卡片；介绍页顺序：介绍卡（标题「AI 时代的 Mac 清理工具」无句号 + 一段说明，不以具体工具名开头）→ 优势（三张卡）→ 对比与说明。定位（2026-10-21 用户定）：**AI 时代的清理工具**，AI Coding 是主卖点、影视创作是加分（只是排序，界面上不写「加分项」）；措辞用「AI Coding」不用「AI 编程」；不写具体识别了多少款（写「主流工具」）；不对竞品下没查证的断言；正文字号不小于 13；竞品对比数据在 `Comparison`（2026-10-21 查官网与评测，查不到的格子写「—」，别凭印象补；界面上不写这类内部说明）
 - 左栏扫描位置叫「快速扫描 / 完整扫描」（2026-10-21 定，别再叫「常见缓存 / 我的文件」）
 - 外观三选一（跟随系统/浅色/深色，`AppearanceMode`，同时设 `NSApp.appearance`）；颜色一律用 `Theme` 里的 adaptive 色和 `Theme.fill()`，**不要再写死 `Color.white`**（彩色底上的白字除外）
 - 导航：左栏顶部「总览」；子页（创作工具/微信）左上大号「‹ 返回总览」；再点当前位置也回总览；「关于与反馈」只在左栏底部一处
@@ -14,13 +18,13 @@
 - 背景 `Backdrop` 是柔和的 MeshGradient 色场（macOS 15+），液态玻璃要有东西可折射才看得出来，别换回纯色
 - 子页「返回总览」用蓝色 tinted 按钮（`ToolbarButtonStyle(tinted:)`），别做成灰的
 - 磁盘可用空间一律**实时读** `volumeAvailableCapacityForImportantUsage`（与访达一致），不用扫描时存下的数
-- GitHub **公开仓库**（MIT，2026-10-21 开源）：chenmozhe008/mac-cleanup-manager。仓库里不放密钥、个人路径和个人配置；`SafetyPolicy` 的保护名单只写通用目录。README 面向公众，内部约定写本文件
+- GitHub **公开仓库**（MIT，2026-10-21 开源）：chenmozhe008/qingo。仓库里不放密钥、个人路径和个人配置；`SafetyPolicy` 的保护名单只写通用目录。README 面向公众，内部约定写本文件
 - 文案风格（2026-10-21 用户定，参照 Apple）：一行只说一件事，**不用「·」串信息**；不写「点击这里可以…」这类多余提示；竞品只写查证过的事实
 
 ## 构建与安装
 
-- 打包：`./script/build_and_run.sh --package` → `dist/Mac 清理管家.app`
-- 安装：覆盖到 `~/Applications/Mac 清理管家.app`（用户日常从这里打开）
+- 打包：`./script/build_and_run.sh --package` → `dist/小清.app`
+- 安装：覆盖到 `~/Applications/小清.app`（用户日常从这里打开）
 - `dist/` 里只保留这一个 App；旧名字的包（如 `MacSpaceKeeper.app`）会被误开成旧版，发现就清掉
 - `swift test` 在只有命令行工具（无 Xcode）的环境下会报 TestingMacros 插件缺失，属于环境问题
 
@@ -57,8 +61,8 @@
 ## 验证方法（不抢用户鼠标）
 
 - 截图只截本 App 窗口：按 PID 取最大窗口 ID → `screencapture -l <id>`（不受其他窗口遮挡）
-- 切分类：`defaults write com.forwardyan.MacSpaceKeeper lastFilter "<分类名>"` 后重开 App；**不要用模拟鼠标点击**，用户可能在用电脑（2026-10-20 点到过微信）
-- 启动参数：`open -g "dist/Mac 清理管家.app" --args --scan`（启动即重新扫描）、`--show-about` / `--show-about=反馈`（直接打开「关于」某一页）
+- 切分类：`defaults write io.github.chenmozhe008.qingo lastFilter "<分类名>"` 后重开 App；**不要用模拟鼠标点击**，用户可能在用电脑（2026-10-20 点到过微信）
+- 启动参数：`open -g "dist/小清.app" --args --scan`（启动即重新扫描）、`--show-about` / `--show-about=反馈`（直接打开「关于」某一页）
 - 关于页下方内容（对比表）滚不到：临时把 `comparisonTable` 挪到 intro 顶部截图，截完还原
 
 ## 图标

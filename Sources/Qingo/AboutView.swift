@@ -4,8 +4,8 @@ import SwiftUI
 enum AppInfo {
     static let author = "@沉默者之二"
     static let feedbackEmail = "327529709@qq.com"
-    static let repository = URL(string: "https://github.com/chenmozhe008/mac-cleanup-manager")!
-    static let issues = URL(string: "https://github.com/chenmozhe008/mac-cleanup-manager/issues")!
+    static let repository = URL(string: "https://github.com/chenmozhe008/qingo")!
+    static let issues = URL(string: "https://github.com/chenmozhe008/qingo/issues")!
 
     static var version: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "开发版"
@@ -18,7 +18,7 @@ enum AppInfo {
     /// Pasted into feedback mails so problems can be reproduced.
     static var diagnostics: String {
         let os = ProcessInfo.processInfo.operatingSystemVersionString
-        return "Mac 清理管家 \(version)（\(build)）· macOS \(os)"
+        return "小清 Qingo \(version)（\(build)），macOS \(os)"
     }
 
     struct Release: Identifiable {
@@ -50,7 +50,7 @@ enum AppInfo {
     static let requirements = "macOS 14 Sonoma 及以上，Apple 芯片（M1 及更新）的 Mac。扫描范围取决于已授予的文件访问权限"
 
     static func sendFeedback() {
-        let subject = "Mac 清理管家反馈 v\(version)"
+        let subject = "小清反馈 v\(version)"
         let body = "\n\n（请在这里描述遇到的问题，最好附一张截图）\n\(diagnostics)"
         var components = URLComponents()
         components.scheme = "mailto"
@@ -80,7 +80,7 @@ private enum Comparison {
     static func c(_ mark: Mark, _ text: String) -> Cell { Cell(mark: mark, text: text) }
 
     /// Ours first, so the eye lands on it.
-    static let products = ["Mac 清理管家", "CleanMyMac", "柠檬清理", "BuhoCleaner", "DaisyDisk"]
+    static let products = ["小清", "CleanMyMac", "柠檬清理", "BuhoCleaner", "DaisyDisk"]
     static let rows: [(title: String, cells: [Cell])] = [
         ("价格", [c(.good, "免费"), c(.partial, "订阅，约 $39.95/年起"), c(.good, "免费，开源"), c(.partial, "买断约 $20–30"), c(.partial, "$9.99 买断")]),
         ("删错了能找回", [c(.good, "放进废纸篓，随时找回"), c(.none, "一键清理"), c(.none, "一键清理"), c(.none, "一键清理"), c(.bad, "直接永久删除")]),
@@ -133,7 +133,10 @@ struct AboutView: View {
         HStack(alignment: .center, spacing: 16) {
             SidebarBrandMark(size: 60)
             VStack(alignment: .leading, spacing: 5) {
-                Text("Mac 清理管家").font(.system(size: 24, weight: .bold))
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text("小清").font(.system(size: 26, weight: .bold))
+                    Text("Qingo").font(.system(size: 18, weight: .semibold, design: .rounded)).foregroundStyle(Theme.ink3)
+                }
                 HStack(spacing: 14) {
                     Text("v\(AppInfo.version)").font(.system(size: 12.5, weight: .medium)).foregroundStyle(Theme.ink2)
                     Text("作者 \(AppInfo.author)").font(.system(size: 12.5)).foregroundStyle(Theme.ink3)
@@ -187,7 +190,7 @@ struct AboutView: View {
                 Text("AI 时代的 Mac 清理工具")
                     .font(.system(size: 24, weight: .bold, design: .rounded))
                     .foregroundStyle(LinearGradient(colors: [Theme.blue, Theme.indigo], startPoint: .leading, endPoint: .trailing))
-                Text("AI 工具和创作软件每天都在 Mac 上留下运行时、缓存和模型，动不动就是几个 GB。传统清理工具分不清哪些能重新生成、哪些是你的对话和作品。Mac 清理管家看得懂它们：能重新生成的帮你清掉，工程、对话和模型原样留着。")
+                Text("AI 工具和创作软件每天都在 Mac 上留下运行时、缓存和模型，动不动就是几个 GB。传统清理工具分不清哪些能重新生成、哪些是你的对话和作品。小清看得懂它们：能重新生成的帮你清掉，工程、对话和模型原样留着。")
                     .font(.system(size: 14.5)).foregroundStyle(Theme.ink2)
                     .lineSpacing(5)
                     .fixedSize(horizontal: false, vertical: true)
@@ -197,7 +200,7 @@ struct AboutView: View {
                         IconTile(symbol: "chevron.left.forwardslash.chevron.right", tint: Color(red: 0.14, green: 0.16, blue: 0.2), size: 34)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("代码完全开源").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.ink)
-                            Text("github.com/chenmozhe008/mac-cleanup-manager").font(.system(size: 12)).foregroundStyle(Theme.ink2)
+                            Text("github.com/chenmozhe008/qingo").font(.system(size: 12)).foregroundStyle(Theme.ink2)
                         }
                         Spacer(minLength: 8)
                         Label("在 GitHub 查看", systemImage: "arrow.up.right")
