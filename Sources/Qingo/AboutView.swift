@@ -135,10 +135,10 @@ struct AboutView: View {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text("小清").font(.system(size: 26, weight: .bold))
-                    Text("Qingo").font(.system(size: 18, weight: .semibold, design: .rounded)).foregroundStyle(Theme.ink3)
+                    Text("Mac 清理工具").font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.ink2)
                 }
                 HStack(spacing: 14) {
-                    Text("v\(AppInfo.version)").font(.system(size: 12.5, weight: .medium)).foregroundStyle(Theme.ink2)
+                    Text("Qingo v\(AppInfo.version)").font(.system(size: 12.5, weight: .medium)).foregroundStyle(Theme.ink2)
                     Text("作者 \(AppInfo.author)").font(.system(size: 12.5)).foregroundStyle(Theme.ink3)
                     Button { NSWorkspace.shared.open(AppInfo.repository) } label: {
                         Label("GitHub", systemImage: "chevron.left.forwardslash.chevron.right")

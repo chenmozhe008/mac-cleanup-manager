@@ -13,7 +13,7 @@ struct QingoApp: App {
     // bypasses the system squircle mask and shows a raw square.
 
     var body: some Scene {
-        WindowGroup("小清") {
+        WindowGroup("小清 Mac 清理工具") {
             MainView(store: store)
                 .frame(minWidth: 960, minHeight: 640)
         }

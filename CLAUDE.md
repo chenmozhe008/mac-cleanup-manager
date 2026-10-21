@@ -2,7 +2,7 @@
 
 原生 SwiftUI 磁盘扫描/缓存清理 App。功能说明看 README.md。
 
-- 名字（2026-10-21 用户定）：中文「小清」、英文「Qingo」；名字里不带 Mac（以后可能做 Windows）。图标暂不改（出过三版方案，用户选择先保留，稿在 `output/mockups/qingo-icon/`）
+- 名字（2026-10-21 用户定）：中文「小清」、英文「Qingo」；**出现名字的地方都要带「Mac 清理工具」**（侧栏、欢迎页、关于、README、仓库简介），光写「小清」别人不知道是干嘛的；名字里不带 Mac（以后可能做 Windows）。图标暂不改（出过三版方案，用户选择先保留，稿在 `output/mockups/qingo-icon/`）
 - 身份：Swift 模块/可执行文件 `Qingo`，bundle id `io.github.chenmozhe008.qingo`；旧身份 `com.forwardyan.MacSpaceKeeper` 的设置和 `Application Support/MacSpaceKeeper/results` 由 `LegacyMigration` 带过来，别删
 - 分发：走 GitHub Releases（以后再做公证），**不上 Mac App Store**（沙盒读不了 ~/Library 和其他应用目录，核心功能会废）
 

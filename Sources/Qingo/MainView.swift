@@ -58,9 +58,14 @@ struct MainView: View {
             Spacer(minLength: 48)
             brandIcon(150)
                 .shadow(color: Theme.blue.opacity(0.7), radius: 34, y: 18)
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("小清").font(.system(size: 20, weight: .bold))
+                Text("Mac 清理工具").font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.ink2)
+            }
+            .padding(.top, 22)
             Text("看看磁盘空间都去哪了")
                 .font(.system(size: 34, weight: .bold))
-                .padding(.top, 26)
+                .padding(.top, 10)
             Text("扫描只读不改。能清的由你勾选，拿不准的只做提示。")
                 .font(.system(size: 14))
                 .foregroundStyle(Theme.ink2)
@@ -82,14 +87,12 @@ struct MainView: View {
             .buttonStyle(.plain)
             .keyboardShortcut(.defaultAction)
             .padding(.top, 40)
-            HStack(spacing: 8) {
+            HStack(spacing: 18) {
                 Text("或").foregroundStyle(Theme.ink2)
                 Button("完整扫描") { store.scanLocation(home) }
                 ForEach(store.savedFolders, id: \.self) { folder in
-                    Text("·").foregroundStyle(Theme.ink3)
                     Button(folder.lastPathComponent) { store.scanLocation(folder) }
                 }
-                Text("·").foregroundStyle(Theme.ink3)
                 Button("添加文件夹…") { store.chooseFolder() }
             }
             .buttonStyle(LinkButtonStyle())
@@ -359,8 +362,8 @@ struct MainView: View {
             HStack(spacing: 10) {
                 brandIcon(38).shadow(color: .black.opacity(0.12), radius: 3, y: 1)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("小清").font(.system(size: 15, weight: .semibold))
-                    Text("扫描只读，清理前确认").font(.system(size: 11.5)).foregroundStyle(Theme.ink3)
+                    Text("小清").font(.system(size: 16, weight: .bold))
+                    Text("Mac 清理工具").font(.system(size: 12)).foregroundStyle(Theme.ink2)
                 }
             }
             .padding(.horizontal, 8)

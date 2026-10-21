@@ -2,9 +2,9 @@
 
 <img src="docs/images/icon.png" width="128" alt="小清图标">
 
-# 小清 Qingo
+# 小清：Mac 清理工具
 
-**AI 时代的 Mac 清理工具**
+**Qingo**，AI 时代的 Mac 清理工具
 
 认得 Cursor、Claude Code、Codex、剪映、达芬奇……缓存帮你清掉，工程、对话和模型原样留着。
 
