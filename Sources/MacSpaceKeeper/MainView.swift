@@ -310,7 +310,7 @@ struct MainView: View {
             HStack(spacing: 10) {
                 liveTotal("可清理缓存", ByteFormat.string(ScanStore.sum(caches)), Theme.cyan)
                 liveTotal("创作与 AI 工具", ByteFormat.string(ScanStore.sum(creative)), Theme.pink)
-                liveTotal("大文件与工程", "\(large.count) 项", Theme.violet)
+                liveTotal("大文件与工程", store.isQuickScope ? "完整扫描才查" : "\(large.count) 项", Theme.violet)
             }
         }
     }
@@ -322,7 +322,7 @@ struct MainView: View {
             itemIcon(item, info: info)
             VStack(alignment: .leading, spacing: 3) {
                 Text(info.title).font(.system(size: 14, weight: .medium)).lineLimit(1).truncationMode(.middle)
-                Text("\(category?.title ?? item.kind.label) · \(actionHint(item)) · \(item.url.deletingLastPathComponent().lastPathComponent)")
+                Text("\(category?.title ?? item.kind.label) · \(actionHint(item)) · \(shortPath(item.url))")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.ink3)
                     .lineLimit(1)
@@ -641,7 +641,7 @@ struct MainView: View {
                 Button { withAnimation(.easeOut(duration: 0.15)) { store.showOverview() } } label: {
                     Label("返回总览", systemImage: "chevron.left")
                 }
-                .buttonStyle(ToolbarButtonStyle(large: true))
+                .buttonStyle(ToolbarButtonStyle(large: true, tinted: true))
                 .keyboardShortcut("[", modifiers: .command)
                 .help("回到总览（⌘[）")
             }
@@ -1628,7 +1628,7 @@ struct MainView: View {
     // MARK: Helpers
 
     private func actionHint(_ item: ScanItem) -> String {
-        if let app = CreativeApp.of(item) { return item.canTrash ? "可在此清理" : "在\(app.shortName)中清理" }
+        if CreativeApp.of(item) != nil { return item.canTrash ? "可在此清理" : "只统计，不删除" }
         return tagText(item)
     }
 

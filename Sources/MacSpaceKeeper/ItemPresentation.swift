@@ -91,7 +91,7 @@ enum ItemPresentation {
     private static func resolve(_ item: ScanItem) -> Info {
         let name = item.name
         if let app = CreativeApp.of(item) {
-            return Info(title: "\(app.title) \(partTitle(for: item))", icon: appIcon(bundleID: app.bundleID), symbol: "film.stack")
+            return Info(title: "\(app.title) \(partTitle(for: item))", icon: appIcon(bundleID: app.bundleID), symbol: app.group.symbol)
         }
         if let alias = aliases[name], let icon = appIcon(bundleID: alias.bundleID) {
             return Info(title: alias.title, icon: icon, symbol: "app.fill")

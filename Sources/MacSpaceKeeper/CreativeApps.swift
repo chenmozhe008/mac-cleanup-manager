@@ -139,7 +139,7 @@ struct CreativeApp: Hashable, Sendable, Identifiable {
                                       folders: ["AIGC创作辅助工具", "com.aigc.director-tool"])
 
     // AI 助手
-    static let chatgpt = CreativeApp("chatgpt", "ChatGPT", .aiChat, apps: ["com.openai.chat"], folders: ["ChatGPT", "com.openai.chat"])
+    static let chatgpt = CreativeApp("chatgpt", "ChatGPT", .aiChat, apps: ["ChatGPT", "com.openai.chat"], folders: ["ChatGPT", "com.openai.chat"])
     static let claude = CreativeApp("claude", "Claude", .aiChat, apps: ["com.anthropic.claudefordesktop"], folders: ["Claude", "Claude-3p", "com.anthropic.claudefordesktop"])
     static let perplexity = CreativeApp("perplexity", "Perplexity", .aiChat, apps: ["ai.perplexity.mac", "Perplexity"], folders: ["Perplexity"])
     static let doubao = CreativeApp("doubao", "豆包", .aiChat, apps: ["豆包", "Doubao"], folders: ["豆包", "Doubao", "doubao"])

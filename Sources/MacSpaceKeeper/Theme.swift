@@ -67,19 +67,31 @@ enum Theme {
     }
 }
 
+/// Soft colour field behind the glass cards; Liquid Glass needs something to refract, a flat fill looks like plain white panels.
 struct Backdrop: View {
+    @Environment(\.colorScheme) private var scheme
+
     var body: some View {
         ZStack {
-            // The desktop shows through faintly behind the brand gradient (macOS 26 Liquid Glass look).
             WindowBlur()
-            Theme.base.opacity(0.84)
-            RadialGradient(colors: [Color.adaptive(light: rgb(0.62, 0.74, 1.0, 0.45), dark: rgb(0.11, 0.23, 0.54, 0.7)), .clear],
-                           center: UnitPoint(x: 0.3, y: 0), startRadius: 0, endRadius: 760)
-            RadialGradient(colors: [Color.adaptive(light: rgb(0.82, 0.72, 1.0, 0.38), dark: rgb(0.23, 0.11, 0.54, 0.6)), .clear],
-                           center: .bottomTrailing, startRadius: 0, endRadius: 620)
+            if #available(macOS 15.0, *) {
+                MeshGradient(width: 3, height: 3,
+                             points: [[0, 0], [0.5, 0], [1, 0], [0, 0.5], [0.55, 0.45], [1, 0.5], [0, 1], [0.5, 1], [1, 1]],
+                             colors: (scheme == .dark ? Self.dark : Self.light).map { Color(red: $0[0], green: $0[1], blue: $0[2]) })
+                    .opacity(0.92)
+            } else {
+                Theme.base.opacity(0.9)
+            }
         }
         .ignoresSafeArea()
     }
+
+    private static let light: [[Double]] = [[0.84, 0.89, 1.0], [0.91, 0.89, 1.0], [0.83, 0.93, 1.0],
+                                            [0.90, 0.92, 1.0], [0.96, 0.97, 1.0], [0.93, 0.89, 1.0],
+                                            [0.83, 0.92, 0.99], [0.91, 0.91, 1.0], [0.95, 0.88, 0.97]]
+    private static let dark: [[Double]] = [[0.07, 0.10, 0.22], [0.11, 0.08, 0.25], [0.04, 0.13, 0.23],
+                                           [0.07, 0.08, 0.17], [0.05, 0.06, 0.12], [0.12, 0.07, 0.21],
+                                           [0.04, 0.11, 0.20], [0.07, 0.07, 0.18], [0.14, 0.06, 0.19]]
 }
 
 /// Behind-window blur so the window itself reads as glass.
@@ -215,18 +227,20 @@ struct UsageRing: View {
 struct ToolbarButtonStyle: ButtonStyle {
     var prominent = false
     var large = false
+    /// Blue-tinted secondary, for navigation such as "返回总览".
+    var tinted = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: large ? 14 : 13, weight: .semibold))
             .labelStyle(.titleAndIcon)
             .fixedSize(horizontal: true, vertical: false)
-            .foregroundStyle(prominent ? Color.white : Theme.ink)
+            .foregroundStyle(prominent ? Color.white : (tinted ? Theme.blue : Theme.ink))
             .padding(.horizontal, large ? 18 : 12)
             .padding(.vertical, large ? 10 : 7)
             .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(prominent ? Theme.blue : Theme.fill(configuration.isPressed ? 0.12 : 0.05)))
-            .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(prominent ? .clear : Theme.line))
+                .fill(prominent ? Theme.blue : (tinted ? Theme.blue.opacity(configuration.isPressed ? 0.2 : 0.12) : Theme.fill(configuration.isPressed ? 0.12 : 0.05))))
+            .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(prominent ? .clear : (tinted ? Theme.blue.opacity(0.28) : Theme.line)))
             .opacity(configuration.isPressed ? 0.8 : 1)
             .contentShape(Rectangle())
     }
@@ -312,43 +326,44 @@ struct FlowLayout: Layout {
 }
 
 
-/// Disk space ring: a glass disc with one gradient arc for the share in use.
+/// Disk space ring: a dial of ticks on a glass disc; lit ticks are the share in use.
 struct DiskRing: View {
     let usedFraction: Double
     let low: Bool
     let free: String
     let caption: String
 
+    private static let tickCount = 60
+    private static let normal: [Color] = [Color(red: 0.20, green: 0.80, blue: 1.0), Color(red: 0.24, green: 0.48, blue: 1.0),
+                                          Color(red: 0.50, green: 0.36, blue: 1.0), Color(red: 0.82, green: 0.40, blue: 0.95)]
+    private static let warning: [Color] = [Color(red: 1.0, green: 0.78, blue: 0.30), Color(red: 1.0, green: 0.52, blue: 0.20),
+                                           Color(red: 0.95, green: 0.30, blue: 0.30)]
+
     var body: some View {
         GeometryReader { proxy in
             let size = min(proxy.size.width, proxy.size.height)
-            let line = size * 0.075
-            let colors = low ? [Theme.amber, Theme.orange, Theme.amber] : [Theme.cyan, Theme.blue, Theme.indigo, Theme.cyan]
+            let lit = Int((min(max(usedFraction, 0), 1) * Double(Self.tickCount)).rounded())
+            let length = size * 0.1
+            let width = size * 0.024
+            let colors = low ? Self.warning : Self.normal
             ZStack {
-                disc(size)
-                Circle()
-                    .stroke(Theme.fill(0.08), lineWidth: line)
-                    .padding(line / 2 + size * 0.04)
-                Circle()
-                    .trim(from: 0, to: min(max(usedFraction, 0.01), 1))
-                    .stroke(AngularGradient(colors: colors, center: .center), style: StrokeStyle(lineWidth: line, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .shadow(color: (low ? Theme.amber : Theme.blue).opacity(0.35), radius: line * 0.6)
-                    .padding(line / 2 + size * 0.04)
-                Circle()
-                    .strokeBorder(LinearGradient(colors: [Color.white.opacity(0.9), Color.white.opacity(0.05), Color.white.opacity(0.35)],
-                                                 startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
-                    .allowsHitTesting(false)
-                VStack(spacing: 4) {
+                disc(size).padding(length + size * 0.05)
+                Ticks(count: Self.tickCount, range: lit..<Self.tickCount, length: length, width: width)
+                    .fill(Theme.fill(0.12))
+                Ticks(count: Self.tickCount, range: 0..<lit, length: length, width: width)
+                    .fill(AngularGradient(colors: colors + [colors[0]], center: .center,
+                                          startAngle: .degrees(-90), endAngle: .degrees(270)))
+                    .shadow(color: colors[1].opacity(0.45), radius: size * 0.03)
+                VStack(spacing: 2) {
                     Text(free)
-                        .font(.system(size: size * 0.15, weight: .bold, design: .rounded))
+                        .font(.system(size: size * 0.125, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
                         .foregroundStyle(low ? Theme.amber : Theme.ink)
                     Text(caption).font(.system(size: 12.5, weight: .medium)).foregroundStyle(low ? Theme.amber : Theme.ink2).lineLimit(1)
                 }
-                .padding(.horizontal, size * 0.16)
+                .padding(.horizontal, length + size * 0.08)
             }
             .frame(width: size, height: size)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -362,5 +377,25 @@ struct DiskRing: View {
         } else {
             Circle().fill(Theme.panel)
         }
+    }
+}
+
+/// Radial tick marks around a circle, starting at 12 o'clock.
+struct Ticks: Shape {
+    let count: Int
+    let range: Range<Int>
+    let length: CGFloat
+    let width: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = min(rect.width, rect.height) / 2
+        for index in range {
+            let angle = Double(index) / Double(count) * 2 * .pi - .pi / 2
+            let tick = Path(roundedRect: CGRect(x: radius - length, y: -width / 2, width: length, height: width), cornerRadius: width / 2)
+            path.addPath(tick, transform: CGAffineTransform(translationX: center.x, y: center.y).rotated(by: angle))
+        }
+        return path
     }
 }

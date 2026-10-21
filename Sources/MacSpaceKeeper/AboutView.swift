@@ -131,9 +131,6 @@ struct AboutView: View {
             SidebarBrandMark(size: 60)
             VStack(alignment: .leading, spacing: 5) {
                 Text("Mac 清理管家").font(.system(size: 24, weight: .bold))
-                Text("AI 时代的 Mac 清理工具")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(LinearGradient(colors: [Theme.blue, Theme.indigo], startPoint: .leading, endPoint: .trailing))
                 Text("v\(AppInfo.version) · 作者 \(AppInfo.author)")
                     .font(.system(size: 12.5)).foregroundStyle(Theme.ink3)
             }
@@ -175,6 +172,22 @@ struct AboutView: View {
     /// Order the user asked for: what it is → strengths (AI first, film as the bonus) → comparison.
     private var intro: some View {
         VStack(alignment: .leading, spacing: 28) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("AI 时代的 Mac 清理工具")
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .foregroundStyle(LinearGradient(colors: [Theme.blue, Theme.indigo], startPoint: .leading, endPoint: .trailing))
+                Text("AI 工具和创作软件每天都在 Mac 上留下运行时、缓存和模型，动不动就是几个 GB。传统清理工具分不清哪些能重新生成、哪些是你的对话和作品。Mac 清理管家看得懂它们：能重新生成的帮你清掉，工程、对话和模型原样留着。")
+                    .font(.system(size: 14.5)).foregroundStyle(Theme.ink2)
+                    .lineSpacing(5)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(22)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(LinearGradient(colors: [Theme.blue.opacity(0.09), Theme.indigo.opacity(0.07), Theme.cyan.opacity(0.05)],
+                                     startPoint: .topLeading, endPoint: .bottomTrailing)))
+            .glass(radius: 16)
+
             VStack(alignment: .leading, spacing: 12) {
                 Text("它的优势").font(.system(size: 18, weight: .bold))
                 advantage("懂 AI Coding", nil, "chevron.left.forwardslash.chevron.right", Theme.blue,
