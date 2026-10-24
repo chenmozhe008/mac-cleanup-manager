@@ -14,6 +14,16 @@ enum ItemPresentation {
 
     private static var cache: [URL: Info] = [:]
     private static var appIcons: [String: NSImage] = [:]
+    private static var fileIcons: [String: NSImage] = [:]
+    private static let policy = SafetyPolicy()
+
+    /// Finder icon of a file or bundle, cached: list rows ask for it on every redraw.
+    static func icon(forPath path: String) -> NSImage {
+        if let hit = fileIcons[path] { return hit }
+        let icon = NSWorkspace.shared.icon(forFile: path)
+        fileIcons[path] = icon
+        return icon
+    }
 
     /// Folder name → (title, symbol) for tool caches that have no app of their own.
     private static let known: [String: (String, String)] = [
@@ -56,7 +66,7 @@ enum ItemPresentation {
         let name = item.name
         if name == "Render Files" { return "渲染文件 · \(item.url.deletingLastPathComponent().lastPathComponent)" }
         if name == "CacheClip" { return "渲染缓存 CacheClip" }
-        if let model = SafetyPolicy().modelName(item.url) { return "模型 \(model)" }
+        if let model = policy.modelName(item.url) { return "模型 \(model)" }
         if !item.canTrash { return "本地数据" }
         if name.hasPrefix("Disk Cache") { return "磁盘缓存" }
         if name.hasPrefix("Media Cache") { return "媒体缓存" }

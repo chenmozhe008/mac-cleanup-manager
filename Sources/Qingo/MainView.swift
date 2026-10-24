@@ -937,7 +937,6 @@ struct MainView: View {
     private func row(_ item: ScanItem, maxBytes: Int64) -> some View {
         let expanded = store.selectedID == item.id
         let picked = store.selectedCleanupIDs.contains(item.id)
-        let hovered = store.hoveredID == item.id
         let info = ItemPresentation.info(for: item)
         // One fact per line: what to do with it. Folder name and path live in the expanded detail.
         let subtitle = tagText(item)
@@ -969,7 +968,7 @@ struct MainView: View {
                 Button { toggleDetail(item) } label: {
                     Image(systemName: expanded ? "chevron.up.circle.fill" : "info.circle")
                         .font(.system(size: 16))
-                        .foregroundStyle(expanded ? Theme.cyan : (hovered ? Theme.ink2 : Theme.ink3))
+                        .foregroundStyle(expanded ? Theme.cyan : Theme.ink3)
                         .frame(width: 28, height: 28)
                         .contentShape(Rectangle())
                 }
@@ -1004,7 +1003,8 @@ struct MainView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(rowBackground(picked: picked, expanded: expanded, hovered: hovered, tint: tint))
+        .background(rowBackground(picked: picked, expanded: expanded, tint: tint))
+        .background(HoverFill(tracker: store.hover, id: item.id))
         .overlay(alignment: .leading) {
             if picked { Rectangle().fill(tint).frame(width: 3).shadow(color: tint, radius: 4) }
         }
@@ -1019,7 +1019,7 @@ struct MainView: View {
             }
         }
         .onHover { inside in
-            if inside { store.hoveredID = item.id } else if store.hoveredID == item.id { store.hoveredID = nil }
+            store.hover.update(item.id, inside: inside)
         }
         .contextMenu {
             if store.isSelectable(item) {
@@ -1038,7 +1038,6 @@ struct MainView: View {
         let pickedCount = cleanable.filter { store.selectedCleanupIDs.contains($0.id) }.count
         let allPicked = !cleanable.isEmpty && pickedCount == cleanable.count
         let expanded = store.expandedGroups.contains(group.id)
-        let hovered = store.hoveredID == first.id
         let parents = group.items.map { $0.url.deletingLastPathComponent().path }
         let common = parents.dropFirst().reduce(parents[0]) { prefix, path in
             var result = prefix
@@ -1095,7 +1094,7 @@ struct MainView: View {
             Button(action: toggleExpanded) {
                 Image(systemName: expanded ? "chevron.up.circle.fill" : "chevron.down.circle")
                     .font(.system(size: 16))
-                    .foregroundStyle(expanded ? Theme.cyan : (hovered ? Theme.ink2 : Theme.ink3))
+                    .foregroundStyle(expanded ? Theme.cyan : Theme.ink3)
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
             }
@@ -1104,7 +1103,8 @@ struct MainView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(allPicked ? tint.opacity(0.08) : (hovered ? Theme.fill(0.07) : .clear))
+        .background(allPicked ? tint.opacity(0.08) : .clear)
+        .background(HoverFill(tracker: store.hover, id: first.id))
         .overlay(alignment: .leading) {
             if pickedCount > 0 { Rectangle().fill(tint).frame(width: 3).shadow(color: tint, radius: 4) }
         }
@@ -1118,7 +1118,7 @@ struct MainView: View {
             }
         }
         .onHover { inside in
-            if inside { store.hoveredID = first.id } else if store.hoveredID == first.id { store.hoveredID = nil }
+            store.hover.update(first.id, inside: inside)
         }
         .contextMenu {
             if !cleanable.isEmpty {
@@ -1142,10 +1142,9 @@ struct MainView: View {
         return "主要在 \(tops.joined(separator: "、"))\(counts.count > 2 ? " 等处" : " 里")"
     }
 
-    private func rowBackground(picked: Bool, expanded: Bool, hovered: Bool, tint: Color) -> Color {
+    private func rowBackground(picked: Bool, expanded: Bool, tint: Color) -> Color {
         if expanded { return Theme.blue.opacity(0.14) }
-        if picked { return tint.opacity(hovered ? 0.12 : 0.08) }
-        return hovered ? Theme.fill(0.07) : .clear
+        return picked ? tint.opacity(0.08) : .clear
     }
 
     /// Cyan for regenerable caches, amber for items the user decides about.
@@ -1179,6 +1178,7 @@ struct MainView: View {
         if decided > 0 { notes.append("下载的模型有 \(ByteFormat.string(decided)) 可以挑着删，删了要重新下载。") }
         if result.isQuickScan { notes.append("Final Cut 渲染文件和达芬奇 CacheClip 需要完整扫描才能找到。") }
         return ScrollView {
+            GlassGroup {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(headline).font(.system(size: 24, weight: .bold))
@@ -1210,6 +1210,7 @@ struct MainView: View {
             }
             .padding(.horizontal, 26)
             .padding(.vertical, 22)
+            }
         }
     }
 
@@ -1486,7 +1487,6 @@ struct MainView: View {
 
     private func creativeRow(_ item: ScanItem, app: CreativeApp) -> some View {
         let picked = store.selectedCleanupIDs.contains(item.id)
-        let hovered = store.hoveredID == item.id
         let selectable = store.isSelectable(item)
         let failure = store.failureReasons[item.id]
         let tint = selectionTint(item)
@@ -1520,7 +1520,8 @@ struct MainView: View {
         .padding(.leading, 70)
         .padding(.trailing, 18)
         .padding(.vertical, 11)
-        .background(picked ? tint.opacity(0.08) : (hovered ? Theme.fill(0.05) : .clear))
+        .background(picked ? tint.opacity(0.08) : .clear)
+        .background(HoverFill(tracker: store.hover, id: item.id, color: Theme.fill(0.05)))
         .overlay(alignment: .top) { Rectangle().fill(Theme.line).frame(height: 1) }
         .contentShape(Rectangle())
         .onTapGesture {
@@ -1529,7 +1530,7 @@ struct MainView: View {
             }
         }
         .onHover { inside in
-            if inside { store.hoveredID = item.id } else if store.hoveredID == item.id { store.hoveredID = nil }
+            store.hover.update(item.id, inside: inside)
         }
         .contextMenu { Button("在访达中显示") { reveal(item) } }
     }
@@ -1879,6 +1880,25 @@ struct MainView: View {
         .background(Backdrop())
         .preferredColorScheme(store.appearance.colorScheme)
     }
+}
+
+/// Which list row the pointer is over. Kept out of `ScanStore`: publishing it there redrew the whole window
+/// for every row the pointer crossed while scrolling. Only `HoverFill` views observe it.
+@MainActor
+final class HoverTracker: ObservableObject {
+    @Published private(set) var id: URL?
+
+    func update(_ row: URL, inside: Bool) {
+        if inside { id = row } else if id == row { id = nil }
+    }
+}
+
+struct HoverFill: View {
+    @ObservedObject var tracker: HoverTracker
+    let id: URL
+    var color: Color = Theme.fill(0.07)
+
+    var body: some View { Rectangle().fill(tracker.id == id ? color : .clear) }
 }
 
 /// Lets the borderless-looking window be dragged from any empty background area.

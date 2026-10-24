@@ -6,8 +6,15 @@ import SwiftUI
 final class ScanStore: ObservableObject {
     @Published var root = FileManager.default.homeDirectoryForCurrentUser
     @Published var result: ScanResult? {
-        didSet { decisionNotes = Self.decisionNotes(for: result, policy: policy) }
+        didSet {
+            decisionNotes = Self.decisionNotes(for: result, policy: policy)
+            // Sidebar, cards and list all ask per category on every redraw; sort items once per result.
+            var buckets: [ItemFilter: [ScanItem]] = [:]
+            for category in ItemFilter.allCases { buckets[category] = result?.items.filter { category.contains($0) } ?? [] }
+            itemsByCategory = buckets
+        }
     }
+    private var itemsByCategory: [ItemFilter: [ScanItem]] = [:]
     /// Items the user may delete after confirming, with what deleting costs (see `SafetyPolicy.decisionNote`).
     @Published private(set) var decisionNotes: [URL: String] = [:]
     /// Why an item could not be moved in the last cleanup; shown on its row until the next scan.
@@ -37,7 +44,9 @@ final class ScanStore: ObservableObject {
     @Published var filter: ItemFilter = .caches {
         didSet { UserDefaults.standard.set(filter.rawValue, forKey: Keys.lastFilter) }
     }
+    /// Sidebar folder row under the pointer (shows its remove button). List rows use `hover` instead.
     @Published var hoveredID: URL?
+    let hover = HoverTracker()
     /// Items found so far in the running scan, newest last.
     @Published var liveFound: [ScanItem] = []
     @Published var savedFolders: [URL] = []
@@ -112,7 +121,7 @@ final class ScanStore: ObservableObject {
     var displayedItems: [ScanItem] { items(in: filter) }
 
     func items(in category: ItemFilter) -> [ScanItem] {
-        result?.items.filter { category.contains($0) } ?? []
+        itemsByCategory[category] ?? []
     }
 
     var scopeTitle: String {

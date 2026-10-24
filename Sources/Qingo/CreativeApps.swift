@@ -313,7 +313,17 @@ struct CreativeApp: Hashable, Sendable, Identifiable {
         url.lastPathComponent == "CacheClip" || (url.lastPathComponent == "Render Files" && url.path.contains(".fcpbundle/"))
     }
 
+    /// Owner by path. Views ask this for every row on every redraw, and the answer never changes for a path.
+    private static let ownerCache = OwnerCache()
+
     static func of(_ item: ScanItem) -> CreativeApp? {
+        if let hit = ownerCache.value(for: item.url.path) { return hit.app }
+        let app = resolveOwner(item)
+        ownerCache.store(app, for: item.url.path)
+        return app
+    }
+
+    private static func resolveOwner(_ item: ScanItem) -> CreativeApp? {
         let path = item.url.path
         if item.name == "Render Files", path.contains(".fcpbundle/") { return .finalCut }
         if item.name == "CacheClip" { return .davinci }
@@ -328,6 +338,25 @@ struct CreativeApp: Hashable, Sendable, Identifiable {
             for root in app.roots where !root.contains("/") && (path.hasSuffix("/" + root) || path.contains("/" + root + "/")) { return app }
         }
         return nil
+    }
+}
+
+/// Thread-safe memo for `CreativeApp.of`; scanning runs off the main thread too.
+private final class OwnerCache: @unchecked Sendable {
+    struct Entry { let app: CreativeApp? }
+    private let lock = NSLock()
+    private var entries: [String: Entry] = [:]
+
+    func value(for path: String) -> Entry? {
+        lock.lock()
+        defer { lock.unlock() }
+        return entries[path]
+    }
+
+    func store(_ app: CreativeApp?, for path: String) {
+        lock.lock()
+        entries[path] = Entry(app: app)
+        lock.unlock()
     }
 }
 

@@ -6,7 +6,7 @@ APP_NAME="小清"
 EXECUTABLE_NAME="Qingo"
 BUNDLE_ID="io.github.chenmozhe008.qingo"
 MIN_SYSTEM_VERSION="14.0"
-APP_VERSION="1.3.0"
+APP_VERSION="1.3.1"
 CODESIGN_IDENTITY="${CODESIGN_IDENTITY:-Apple Development}"
 # Without that certificate (e.g. a fresh clone), fall back to ad-hoc signing so the build still runs locally.
 if [[ "$CODESIGN_IDENTITY" != "-" ]] && ! security find-identity -v -p codesigning 2>/dev/null | grep -q "$CODESIGN_IDENTITY"; then
@@ -18,8 +18,9 @@ APP_MACOS="$APP_BUNDLE/Contents/MacOS"
 APP_BINARY="$APP_MACOS/$EXECUTABLE_NAME"
 
 cd "$ROOT_DIR"
-swift build
-BUILD_BINARY="$(swift build --show-bin-path)/$EXECUTABLE_NAME"
+# Release build: the debug build is several times slower and made long lists stutter while scrolling.
+swift build -c release
+BUILD_BINARY="$(swift build -c release --show-bin-path)/$EXECUTABLE_NAME"
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS"

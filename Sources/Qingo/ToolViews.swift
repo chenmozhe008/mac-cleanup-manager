@@ -311,7 +311,7 @@ struct UninstallView: View {
         let used = ToolText.lastUsed(app.lastUsed)
         return Button { withAnimation(.easeOut(duration: 0.15)) { store.select(app) } } label: {
             HStack(spacing: 12) {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: app.id.path)).resizable().interpolation(.high).frame(width: 32, height: 32)
+                Image(nsImage: ItemPresentation.icon(forPath: app.id.path)).resizable().interpolation(.high).frame(width: 32, height: 32)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(app.name).font(.system(size: 14, weight: selected ? .semibold : .medium)).lineLimit(1)
                     if let used {
@@ -392,7 +392,7 @@ struct UninstallView: View {
         return ScrollView {
             VStack(spacing: 0) {
                 HStack(alignment: .center, spacing: 16) {
-                    Image(nsImage: NSWorkspace.shared.icon(forFile: app.id.path)).resizable().interpolation(.high).frame(width: 64, height: 64)
+                    Image(nsImage: ItemPresentation.icon(forPath: app.id.path)).resizable().interpolation(.high).frame(width: 64, height: 64)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(app.name).font(.system(size: 20, weight: .bold))
                         if let used = ToolText.lastUsed(app.lastUsed) {
@@ -595,6 +595,7 @@ struct DevProjectsView: View {
         let shown = store.projects(in: store.filter)
         let total = ScanStore.sum(result.projects.flatMap(\.artifacts))
         return ScrollView {
+            GlassGroup {
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(result.projects.isEmpty ? "没有发现占地方的依赖和构建产物" : "依赖和构建产物共 \(ByteFormat.string(total))")
@@ -632,6 +633,7 @@ struct DevProjectsView: View {
             .padding(.horizontal, 26)
             .padding(.vertical, 6)
             .padding(.bottom, 16)
+            }
         }
     }
 

@@ -125,6 +125,19 @@ extension View {
     }
 }
 
+/// Groups glass cards so macOS 26 renders them together; one pass per card made long scrolling pages stutter.
+struct GlassGroup<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer { content }
+        } else {
+            content
+        }
+    }
+}
+
 struct GhostButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label

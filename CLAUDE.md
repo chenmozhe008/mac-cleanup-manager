@@ -42,7 +42,16 @@
 - 分类色：可清理缓存=青、需要判断=琥珀、大文件与工程=紫
 - 已删「目录占用」分类（用户看不懂、不可操作）；工程/应用数据 < 200 MB 不列入（`minProjectBytes`）
 
-- 本机只有命令行工具，**`@State` 等 SwiftUI 宏编译不过**（缺 SwiftUIMacros 插件）。视图状态一律放进 `ScanStore` 的 `@Published`
+- 本机只有命令行工具，**`@State` 等 SwiftUI 宏编译不过**（缺 SwiftUIMacros 插件，2026-10-25 复核仍如此）。视图状态一律放进 `ScanStore` 的 `@Published`
+
+## 性能（2026-10-25 用户反馈「往下滑很慢很卡」）
+
+- 根因：滚动时鼠标经过每一行都改 `ScanStore.hoveredID` → 整个窗口重画；而每次重画按分类筛 300 多项、每项都跑 `CreativeApp.of` 路径匹配，调试版实测 **675 ms/次**
+- 规矩：
+  - **会频繁变化的状态（悬停）不放 `ScanStore`**：列表行用 `HoverTracker` + `HoverFill`，只有行背景跟着重画；`hoveredID` 只给侧栏文件夹行
+  - **body 里不做按项的重计算**：分类结果在 `result` 的 didSet 里算一次（`itemsByCategory`），`CreativeApp.of` 有路径缓存，图标走 `ItemPresentation.icon(forPath:)` 缓存；新加的按项判断照此办理
+  - 多张玻璃卡片的滚动页包 `GlassGroup`（macOS 26 的 `GlassEffectContainer`）
+  - 打包用 `swift build -c release`（调试版慢几倍）
 
 ## 分类与功能（2026-10-21）
 
