@@ -13,14 +13,15 @@ struct QingoApp: App {
     // bypasses the system squircle mask and shows a raw square.
 
     var body: some Scene {
-        WindowGroup("小清 Mac 清理工具") {
+        // A single `Window`, not a WindowGroup: closing it and clicking the Dock icon brings it back.
+        // (The WindowGroup had its New Window command removed, which also left the Dock icon unable to reopen it.)
+        Window("小清 Mac 清理工具", id: "main") {
             MainView(store: store)
                 .frame(minWidth: 960, minHeight: 640)
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1200, height: 780)
         .commands {
-            CommandGroup(replacing: .newItem) { }
             CommandGroup(replacing: .appInfo) {
                 Button("关于小清") { store.showAbout = true }
             }
