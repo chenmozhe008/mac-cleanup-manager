@@ -28,10 +28,10 @@ struct SafetyPolicy: Sendable {
     func isProtected(_ url: URL) -> Bool {
         let path = CanonicalPath.url(url).path
         if extraProtectedRoots.contains(where: { path == $0.path || path.hasPrefix($0.path + "/") }) { return true }
-        let codexCache = ["Library/Application Support/Codex/Cache", "Library/Application Support/Codex/Code Cache",
-                          "Library/Application Support/Shandianshuo/recordings"]
+        let allowedInside = ["Library/Application Support/Codex/Cache", "Library/Application Support/Codex/Code Cache",
+                             "Library/Application Support/Shandianshuo/recordings", "Library/Developer/Xcode/DerivedData"]
             .map { home.appending(path: $0).path }
-        if codexCache.contains(where: { path == $0 || path.hasPrefix($0 + "/") }) { return false }
+        if allowedInside.contains(where: { path == $0 || path.hasPrefix($0 + "/") }) { return false }
         return protectedRoots.contains { protected in
             path == protected.path || path.hasPrefix(protected.path + "/")
         }
@@ -45,6 +45,10 @@ struct SafetyPolicy: Sendable {
         }
         if path == home.appending(path: "Library/Application Support/Shandianshuo").path {
             return [url.appending(path: "recordings")]
+        }
+        // Only Xcode's build cache; Archives, device support and the rest stay protected.
+        if path == home.appending(path: "Library/Developer/Xcode").path {
+            return [url.appending(path: "DerivedData")]
         }
         return nil
     }
@@ -65,6 +69,13 @@ struct SafetyPolicy: Sendable {
     func reviewDescription(for url: URL, isDirectory: Bool) -> String? {
         guard isDirectory, !isProtected(url) else { return nil }
         let path = CanonicalPath.url(url).path
+        // One downloaded model inside a model tool's folder: listed on its own so it can be picked.
+        if let model = modelName(url) {
+            return "下载的模型 \(model)。删了以后，要用它得重新下载。"
+        }
+        if isVirtualEnvironment(url) {
+            return "Python 虚拟环境。删了以后，要重新创建并安装依赖，这个工程才能运行。"
+        }
         // Only the outermost folder of a recognized tool; its cleanable caches are listed separately.
         if let app = CreativeApp.dataOwner(url, home: home), CreativeApp.cacheNote(url, home: home) == nil,
            CreativeApp.dataOwner(url.deletingLastPathComponent(), home: home) != app || isProtected(url.deletingLastPathComponent()) {
@@ -73,7 +84,7 @@ struct SafetyPolicy: Sendable {
         // Only the outermost node_modules; nested ones are already counted inside it.
         if url.lastPathComponent == "node_modules", hasNodeManifest(near: url),
            !url.deletingLastPathComponent().path.contains("/node_modules") {
-            return "这是项目的依赖文件夹。删掉后要重新安装，可能影响正在做的工程，所以这里只显示占用，由你在工程里决定。"
+            return "这是项目的依赖文件夹。删掉后要重新安装，可能影响正在做的工程。确认这个工程暂时不用了再删。"
         }
         if path == home.appending(path: "Library/Application Support/Shandianshuo/recordings").path {
             return "闪电说的录音。这里只统计超过 15 天的旧录音，删不删由你逐条决定。"
@@ -121,6 +132,7 @@ struct SafetyPolicy: Sendable {
         }
 
         let directCaches = [
+            ("Library/Developer/Xcode/DerivedData", "Xcode 的构建缓存和索引，下次打开工程时会重新生成。"),
             (".cache/uv", "uv 的包缓存，下次安装依赖时可能需要重新下载。"),
             (".cache/pip", "pip 的包缓存，下次安装依赖时可能需要重新下载。"),
             (".npm/_cacache", "npm 的包缓存，下次安装依赖时可能需要重新下载。"),
@@ -134,6 +146,9 @@ struct SafetyPolicy: Sendable {
         // Build artifacts inside projects. The source and the project root stay untouched.
         if name == ".build", FileManager.default.fileExists(atPath: url.deletingLastPathComponent().appending(path: "Package.swift").path) {
             return "Swift 的构建产物，下次构建时会重新生成。"
+        }
+        if name == "target", FileManager.default.fileExists(atPath: url.deletingLastPathComponent().appending(path: "Cargo.toml").path) {
+            return "Rust 的构建产物，下次构建时会重新生成。"
         }
         if ["__pycache__", ".pytest_cache", ".mypy_cache"].contains(name) {
             return "开发工具生成的缓存，运行时会重新生成。"
@@ -150,7 +165,7 @@ struct SafetyPolicy: Sendable {
         let libraryCaches = home.appending(path: "Library/Caches")
         let cacheChildren = (try? FileManager.default.contentsOfDirectory(at: libraryCaches, includingPropertiesForKeys: [.isDirectoryKey])) ?? []
         let extra = [
-            ".cache/uv", ".cache/pip", ".npm/_cacache",
+            ".cache/uv", ".cache/pip", ".npm/_cacache", "Library/Developer/Xcode/DerivedData",
             "Library/Application Support/Codex/Cache", "Library/Application Support/Codex/Code Cache",
             "Library/Application Support/Notion/Partitions/notion/Cache",
             "Library/Application Support/Notion/Partitions/notion/Code Cache",
@@ -174,7 +189,7 @@ struct SafetyPolicy: Sendable {
         guard kind == .cache else { return .c }
         let path = CanonicalPath.url(url).path
         let relative = path.hasPrefix(home.path + "/") ? String(path.dropFirst(home.path.count + 1)) : ""
-        if relative.hasPrefix(".cache/") || relative == ".npm/_cacache" ||
+        if relative.hasPrefix(".cache/") || relative == ".npm/_cacache" || relative == "Library/Developer/Xcode/DerivedData" ||
             (relative.hasPrefix("Library/Application Support/Caches/") && relative.hasSuffix("-updater")) ||
             relative == "Library/Caches/Homebrew" ||
             relative.hasPrefix("Library/Application Support/Adobe/Common/") ||
@@ -183,11 +198,58 @@ struct SafetyPolicy: Sendable {
         }
         // Build artifacts and tool caches regenerate on the next build/run; no app needs quitting.
         let name = url.lastPathComponent
-        if [".build", "__pycache__", ".pytest_cache", ".mypy_cache"].contains(name) ||
+        if [".build", "target", "__pycache__", ".pytest_cache", ".mypy_cache"].contains(name) ||
             (name == "cache" && url.deletingLastPathComponent().lastPathComponent == ".next") {
             return .a
         }
         return .b
+    }
+
+    /// What deleting this costs, for items the user may delete after confirming (not regenerable caches).
+    /// nil means it is not offered for deletion here. `TrashService` re-checks this before moving anything.
+    func decisionNote(for item: ScanItem) -> String? {
+        let url = item.url
+        guard !isProtected(url) else { return nil }
+        switch item.kind {
+        case .review:
+            if url.lastPathComponent == "node_modules", hasNodeManifest(near: url),
+               !url.deletingLastPathComponent().path.contains("/node_modules") {
+                return "删了以后，这个工程要重新安装依赖（npm install 等）才能运行。"
+            }
+            if isVirtualEnvironment(url) { return "删了以后，要重新创建虚拟环境并安装依赖。" }
+            if modelName(url) != nil { return "删了以后，要用这个模型得重新下载。" }
+            return nil
+        case .largeFile:
+            // The user's own files; anything inside ~/Library belongs to an app.
+            let path = CanonicalPath.url(url).path
+            guard !path.hasPrefix(home.appending(path: "Library").path + "/") else { return nil }
+            if ["dmg", "pkg"].contains(url.pathExtension.lowercased()) { return "安装包。删了以后，要用得重新下载。" }
+            return "删了就没有了。请确认它不是还要用的素材或资料。"
+        default:
+            return nil
+        }
+    }
+
+    /// "Qwen/Qwen2.5-7B" for a Hugging Face hub model or an LM Studio model folder, nil otherwise.
+    func modelName(_ url: URL) -> String? {
+        let path = CanonicalPath.url(url).path
+        let parent = CanonicalPath.url(url.deletingLastPathComponent()).path
+        let name = url.lastPathComponent
+        if parent == home.appending(path: ".cache/huggingface/hub").path, name.hasPrefix("models--") {
+            return name.dropFirst("models--".count).replacingOccurrences(of: "--", with: "/")
+        }
+        for root in [".lmstudio/models", ".cache/lm-studio/models"] {
+            let base = home.appending(path: root).path + "/"
+            guard path.hasPrefix(base) else { continue }
+            let parts = path.dropFirst(base.count).split(separator: "/")
+            if parts.count == 2 { return parts.joined(separator: "/") }
+        }
+        return nil
+    }
+
+    private func isVirtualEnvironment(_ url: URL) -> Bool {
+        [".venv", "venv"].contains(url.lastPathComponent)
+            && FileManager.default.fileExists(atPath: url.appending(path: "pyvenv.cfg").path)
     }
 
     private func hasNodeManifest(near url: URL) -> Bool {

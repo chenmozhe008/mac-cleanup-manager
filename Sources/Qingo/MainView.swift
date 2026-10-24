@@ -641,7 +641,7 @@ struct MainView: View {
         }
     }
 
-    private var showFooter: Bool { !store.eligibleInFilter.isEmpty }
+    private var showFooter: Bool { !store.selectableInFilter.isEmpty }
 
     private func topBar(_ result: ScanResult) -> some View {
         HStack(spacing: 10) {
@@ -910,6 +910,8 @@ struct MainView: View {
         let info = ItemPresentation.info(for: item)
         // One fact per line: what to do with it. Folder name and path live in the expanded detail.
         let subtitle = tagText(item)
+        let failed = store.failureReasons[item.id] != nil
+        let tint = selectionTint(item)
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
                 checkbox(item)
@@ -922,7 +924,7 @@ struct MainView: View {
                         .truncationMode(.middle)
                     Text(subtitle)
                         .font(.system(size: 12))
-                        .foregroundStyle(Theme.ink3)
+                        .foregroundStyle(failed ? Theme.amber : Theme.ink3)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
@@ -949,6 +951,12 @@ struct MainView: View {
                         .font(.system(size: 12.5))
                         .foregroundStyle(Theme.ink2)
                         .fixedSize(horizontal: false, vertical: true)
+                    if let cost = store.decisionNotes[item.id] {
+                        Label(cost, systemImage: "exclamationmark.triangle.fill")
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(Theme.amber)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     HStack(spacing: 10) {
                         Text(item.url.path)
                             .font(.system(size: 11.5, design: .monospaced))
@@ -965,15 +973,15 @@ struct MainView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(rowBackground(picked: picked, expanded: expanded, hovered: hovered))
+        .background(rowBackground(picked: picked, expanded: expanded, hovered: hovered, tint: tint))
         .overlay(alignment: .leading) {
-            if picked { Rectangle().fill(Theme.cyan).frame(width: 3).shadow(color: Theme.cyan, radius: 4) }
+            if picked { Rectangle().fill(tint).frame(width: 3).shadow(color: tint, radius: 4) }
         }
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.line).frame(height: 1) }
         .contentShape(Rectangle())
         .onTapGesture {
-            // Clicking anywhere on a cleanable row picks it; other rows open their details.
-            if item.canTrash {
+            // Clicking anywhere on a selectable row picks it; other rows open their details.
+            if store.isSelectable(item) {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) { store.setCleanupSelected(item, selected: !picked) }
             } else {
                 toggleDetail(item)
@@ -983,7 +991,7 @@ struct MainView: View {
             if inside { store.hoveredID = item.id } else if store.hoveredID == item.id { store.hoveredID = nil }
         }
         .contextMenu {
-            if item.canTrash {
+            if store.isSelectable(item) {
                 Button(picked ? "取消选择" : "选择") { store.setCleanupSelected(item, selected: !picked) }
             }
             Button(expanded ? "收起详情" : "查看详情") { toggleDetail(item) }
@@ -994,7 +1002,8 @@ struct MainView: View {
     private func groupRow(_ group: RowGroup, maxBytes: Int64) -> some View {
         let first = group.items[0]
         let info = ItemPresentation.info(for: first)
-        let cleanable = group.items.filter(\.canTrash)
+        let cleanable = group.items.filter(store.isSelectable)
+        let tint = cleanable.allSatisfy(store.isDecidable) ? Theme.amber : Theme.cyan
         let pickedCount = cleanable.filter { store.selectedCleanupIDs.contains($0.id) }.count
         let allPicked = !cleanable.isEmpty && pickedCount == cleanable.count
         let expanded = store.expandedGroups.contains(group.id)
@@ -1015,15 +1024,15 @@ struct MainView: View {
                 Image(systemName: "lock.fill").font(.system(size: 11)).foregroundStyle(Theme.ink3).frame(width: 18, height: 18)
             } else {
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(pickedCount > 0 ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Color.clear))
-                    .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(pickedCount > 0 ? .clear : Theme.ink3, lineWidth: 1.5))
+                    .fill(pickedCount > 0 ? checkFill(tint) : AnyShapeStyle(Color.clear))
+                    .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(pickedCount > 0 ? .clear : checkStroke(tint), lineWidth: 1.5))
                     .overlay {
                         if pickedCount > 0 {
                             Image(systemName: allPicked ? "checkmark" : "minus").font(.system(size: 10, weight: .heavy)).foregroundStyle(.white)
                         }
                     }
                     .frame(width: 18, height: 18)
-                    .shadow(color: pickedCount > 0 ? Theme.cyan.opacity(0.6) : .clear, radius: 5)
+                    .shadow(color: pickedCount > 0 ? tint.opacity(0.6) : .clear, radius: 5)
             }
             itemIcon(first, info: info)
             VStack(alignment: .leading, spacing: 3) {
@@ -1036,7 +1045,7 @@ struct MainView: View {
                         .padding(.vertical, 2)
                         .background(Capsule().fill(Theme.fill(0.08)))
                     if pickedCount > 0 && !allPicked {
-                        Text("已选 \(pickedCount)").font(.system(size: 11.5)).foregroundStyle(Theme.cyan)
+                        Text("已选 \(pickedCount)").font(.system(size: 11.5)).foregroundStyle(tint)
                     }
                 }
                 Text(groupLocation(parents: parents, common: common))
@@ -1064,9 +1073,9 @@ struct MainView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(allPicked ? Theme.cyan.opacity(0.08) : (hovered ? Theme.fill(0.07) : .clear))
+        .background(allPicked ? tint.opacity(0.08) : (hovered ? Theme.fill(0.07) : .clear))
         .overlay(alignment: .leading) {
-            if pickedCount > 0 { Rectangle().fill(Theme.cyan).frame(width: 3).shadow(color: Theme.cyan, radius: 4) }
+            if pickedCount > 0 { Rectangle().fill(tint).frame(width: 3).shadow(color: tint, radius: 4) }
         }
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.line).frame(height: 1) }
         .contentShape(Rectangle())
@@ -1102,11 +1111,18 @@ struct MainView: View {
         return "主要在 \(tops.joined(separator: "、"))\(counts.count > 2 ? " 等处" : " 里")"
     }
 
-    private func rowBackground(picked: Bool, expanded: Bool, hovered: Bool) -> Color {
+    private func rowBackground(picked: Bool, expanded: Bool, hovered: Bool, tint: Color) -> Color {
         if expanded { return Theme.blue.opacity(0.14) }
-        if picked { return Theme.cyan.opacity(hovered ? 0.12 : 0.08) }
+        if picked { return tint.opacity(hovered ? 0.12 : 0.08) }
         return hovered ? Theme.fill(0.07) : .clear
     }
+
+    /// Cyan for regenerable caches, amber for items the user decides about.
+    private func selectionTint(_ item: ScanItem) -> Color { store.isDecidable(item) ? Theme.amber : Theme.cyan }
+
+    private func checkFill(_ tint: Color) -> AnyShapeStyle { tint == Theme.amber ? AnyShapeStyle(Theme.amber) : AnyShapeStyle(Theme.accent) }
+
+    private func checkStroke(_ tint: Color) -> Color { tint == Theme.amber ? Theme.amber.opacity(0.8) : Theme.ink3 }
 
     private func toggleDetail(_ item: ScanItem) {
         withAnimation(.easeOut(duration: 0.18)) { store.selectedID = store.selectedID == item.id ? nil : item.id }
@@ -1119,7 +1135,8 @@ struct MainView: View {
         let found = CreativeApp.allCases.filter { app in items.contains { CreativeApp.of($0) == app } }
         let idle = CreativeApp.allCases.filter { $0.isInstalled && !found.contains($0) }
         let cleanable = ScanStore.sum(items.filter(\.canTrash))
-        let readOnly = ScanStore.sum(items.filter { !$0.canTrash })
+        let decided = ScanStore.sum(items.filter(store.isDecidable))
+        let readOnly = ScanStore.sum(items.filter { !$0.canTrash && !store.isDecidable($0) })
         let headline: String = {
             if found.isEmpty { return "没有发现创作和 AI 工具的占用" }
             if cleanable == 0 { return "\(found.count) 个工具共占用 \(ByteFormat.string(readOnly))" }
@@ -1128,6 +1145,7 @@ struct MainView: View {
         var notes: [String] = []
         if cleanable > 0, readOnly > 0 { notes.append("另有 \(ByteFormat.string(readOnly)) 是工程、模型和对话等数据，只统计、不删除。") }
         if cleanable == 0, readOnly > 0 { notes.append("都是工程、模型和对话等数据，只统计、不删除，要清理请在各自软件里操作。") }
+        if decided > 0 { notes.append("下载的模型有 \(ByteFormat.string(decided)) 可以挑着删，删了要重新下载。") }
         if result.isQuickScan { notes.append("Final Cut 渲染文件和达芬奇 CacheClip 需要完整扫描才能找到。") }
         return ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -1140,7 +1158,7 @@ struct MainView: View {
                     }
                 }
                 .padding(.bottom, 4)
-                if let report = store.cleanupReport { cleanupReportBanner(report) }
+                banners
                 ForEach(CreativeApp.Group.allCases, id: \.self) { group in
                     let apps = found.filter { $0.group == group }
                     if !apps.isEmpty {
@@ -1217,7 +1235,7 @@ struct MainView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                Text("各软件的缓存可以清理；工程、素材、模型和对话只统计，不提供删除。")
+                Text("各软件的缓存可以清理，Hugging Face 和 LM Studio 的模型可以挑着删；工程、素材和对话只统计，不提供删除。")
                     .font(.system(size: 12)).foregroundStyle(Theme.ink3).padding(.top, 2)
             }
         }
@@ -1421,7 +1439,8 @@ struct MainView: View {
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(app.title).font(.system(size: 15.5, weight: .semibold))
-                    Text(items.contains(where: \.canTrash) || app.cleanHow != nil ? app.hint : "\(app.group.dataNote)只统计、不删除，要清理请在\(app.shortName)里操作")
+                    Text(items.contains(where: store.isDecidable) ? "下载的模型可以挑着删，删了要重新下载"
+                         : items.contains(where: \.canTrash) || app.cleanHow != nil ? app.hint : "\(app.group.dataNote)只统计、不删除，要清理请在\(app.shortName)里操作")
                         .font(.system(size: 12)).foregroundStyle(Theme.ink2).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 8)
@@ -1437,33 +1456,30 @@ struct MainView: View {
     private func creativeRow(_ item: ScanItem, app: CreativeApp) -> some View {
         let picked = store.selectedCleanupIDs.contains(item.id)
         let hovered = store.hoveredID == item.id
+        let selectable = store.isSelectable(item)
+        let failure = store.failureReasons[item.id]
+        let tint = selectionTint(item)
         return HStack(spacing: 12) {
             checkbox(item)
             VStack(alignment: .leading, spacing: 3) {
                 Text(ItemPresentation.partTitle(for: item)).font(.system(size: 14, weight: .medium)).lineLimit(1).truncationMode(.middle)
-                Text(shortPath(item.url)).font(.system(size: 12)).foregroundStyle(Theme.ink3).lineLimit(1).truncationMode(.middle)
+                Text(failure.map { "没清掉：\($0)" } ?? (store.isDecidable(item) ? tagText(item) : shortPath(item.url)))
+                    .font(.system(size: 12)).foregroundStyle(failure == nil ? Theme.ink3 : Theme.amber).lineLimit(1).truncationMode(.middle)
             }
             Spacer(minLength: 10)
             if item.canTrash {
-                Text("可在此清理")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Theme.cyan)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(Theme.cyan.opacity(0.1)))
-                    .overlay(Capsule().strokeBorder(Theme.cyan.opacity(0.3)))
+                capsuleTag("可在此清理", tint: Theme.cyan)
+            } else if store.isDecidable(item) {
+                capsuleTag("确认后可删", tint: Theme.amber)
+            } else if app.isInstalled, !app.bundleID.isEmpty {
+                // Data the tool owns is cleaned inside the tool; open it rather than a Finder window.
+                Button { store.openApp(bundleID: app.bundleID) } label: { capsuleTag("在\(app.shortName)里处理", tint: Theme.blue) }
+                    .buttonStyle(.plain)
+                    .help("打开\(app.shortName)，在软件里清理；本应用不删除此处数据")
             } else {
-                Button { reveal(item) } label: {
-                    Text("查看位置")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Theme.amber)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(Theme.amber.opacity(0.1)))
-                        .overlay(Capsule().strokeBorder(Theme.amber.opacity(0.3)))
-                }
-                .buttonStyle(.plain)
-                .help("在访达中定位；本应用不删除此处数据")
+                Button { reveal(item) } label: { capsuleTag("查看位置", tint: Theme.blue) }
+                    .buttonStyle(.plain)
+                    .help("在访达中定位；本应用不删除此处数据")
             }
             Text(ByteFormat.string(item.bytes))
                 .font(.system(size: 14, weight: .medium))
@@ -1473,11 +1489,11 @@ struct MainView: View {
         .padding(.leading, 70)
         .padding(.trailing, 18)
         .padding(.vertical, 11)
-        .background(picked ? Theme.cyan.opacity(0.08) : (hovered ? Theme.fill(0.05) : .clear))
+        .background(picked ? tint.opacity(0.08) : (hovered ? Theme.fill(0.05) : .clear))
         .overlay(alignment: .top) { Rectangle().fill(Theme.line).frame(height: 1) }
         .contentShape(Rectangle())
         .onTapGesture {
-            if item.canTrash {
+            if selectable {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) { store.setCleanupSelected(item, selected: !picked) }
             }
         }
@@ -1485,6 +1501,16 @@ struct MainView: View {
             if inside { store.hoveredID = item.id } else if store.hoveredID == item.id { store.hoveredID = nil }
         }
         .contextMenu { Button("在访达中显示") { reveal(item) } }
+    }
+
+    private func capsuleTag(_ text: String, tint: Color) -> some View {
+        Text(text)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(tint.opacity(0.1)))
+            .overlay(Capsule().strokeBorder(tint.opacity(0.3)))
     }
 
     // MARK: Shared row parts
@@ -1509,11 +1535,12 @@ struct MainView: View {
 
     @ViewBuilder
     private func checkbox(_ item: ScanItem) -> some View {
-        if item.canTrash {
+        if store.isSelectable(item) {
             let on = store.selectedCleanupIDs.contains(item.id)
+            let tint = selectionTint(item)
             RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(on ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Color.clear))
-                .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(on ? .clear : Theme.ink3, lineWidth: 1.5))
+                .fill(on ? checkFill(tint) : AnyShapeStyle(Color.clear))
+                .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(on ? .clear : checkStroke(tint), lineWidth: 1.5))
                 .overlay {
                     Image(systemName: "checkmark")
                         .font(.system(size: 10, weight: .heavy))
@@ -1522,7 +1549,7 @@ struct MainView: View {
                         .opacity(on ? 1 : 0)
                 }
                 .frame(width: 18, height: 18)
-                .shadow(color: on ? Theme.cyan.opacity(0.6) : .clear, radius: 5)
+                .shadow(color: on ? tint.opacity(0.6) : .clear, radius: 5)
         } else {
             Image(systemName: "lock.fill")
                 .font(.system(size: 11))
@@ -1537,6 +1564,7 @@ struct MainView: View {
         let allSelected = inFilter.allSatisfy { store.selectedCleanupIDs.contains($0.id) }
         let empty = store.selectedCleanupItems.isEmpty
         let quit = store.appsToQuit
+        let decided = store.selectedDecidedItems.count
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 12) {
                 if store.isCleaning { ProgressView().controlSize(.small) }
@@ -1547,6 +1575,7 @@ struct MainView: View {
                         .font(.system(size: 14, weight: .semibold)).monospacedDigit()
                     Text(empty ? "点一下列表里的项目就能选中"
                          : !quit.isEmpty ? "清理前请先退出 \(quit.joined(separator: "、"))"
+                         : decided > 0 ? "其中 \(decided) 项删了有影响，确认时会逐条列出"
                          : "移入废纸篓后仍可恢复；清空后才会释放空间。")
                         .font(.system(size: 12.5))
                         .foregroundStyle(!quit.isEmpty ? Theme.amber : Theme.ink2)
@@ -1555,10 +1584,15 @@ struct MainView: View {
                 Spacer(minLength: 0)
             }
             HStack(spacing: 8) {
-                Button(allSelected ? "取消全选" : "全选") {
-                    withAnimation(.easeOut(duration: 0.15)) { allSelected ? store.clearCleanupSelection() : store.selectAllEligible() }
+                // "全选" only covers regenerable caches; items the user decides about are picked one by one.
+                if !inFilter.isEmpty {
+                    Button(allSelected ? "取消全选" : "全选") {
+                        withAnimation(.easeOut(duration: 0.15)) { allSelected ? store.clearCleanupSelection() : store.selectAllEligible() }
+                    }
+                    .keyboardShortcut("a", modifiers: .command)
+                } else if !empty {
+                    Button("取消选择") { withAnimation(.easeOut(duration: 0.15)) { store.clearCleanupSelection() } }
                 }
-                .keyboardShortcut("a", modifiers: .command)
                 if store.filter == .caches {
                     Button("只选可再生缓存") {
                         withAnimation(.easeOut(duration: 0.15)) { store.selectReusable() }
@@ -1566,10 +1600,7 @@ struct MainView: View {
                     .help("选择无需退出应用、下次使用时可重新生成或下载的缓存")
                 }
                 Spacer(minLength: 8)
-                Button("移入废纸篓…") {
-                    store.hoveredID = nil
-                    store.showTrashConfirmation = true
-                }
+                Button("移入废纸篓…") { store.reviewCleanup() }
                 .buttonStyle(ToolbarButtonStyle(prominent: !empty, large: true))
                 .disabled(empty || store.isCleaning)
                 .opacity(empty ? 0.6 : 1)
@@ -1597,6 +1628,15 @@ struct MainView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
+                if !store.undoable.isEmpty {
+                    Button(store.isRestoring ? "正在放回…" : "撤销") { store.undoLastCleanup() }
+                        .buttonStyle(GhostButtonStyle())
+                        .disabled(store.isRestoring)
+                        .help("把刚才移走的放回原处")
+                }
+                if report.movedCount > 0 {
+                    Button("打开废纸篓") { store.openTrash() }.buttonStyle(GhostButtonStyle())
+                }
                 Button { store.cleanupReport = nil } label: {
                     Image(systemName: "xmark").font(.system(size: 12, weight: .semibold))
                         .frame(width: 28, height: 28)
@@ -1619,7 +1659,7 @@ struct MainView: View {
                     }
                     .padding(.top, 6)
                 } label: {
-                    Text("\(report.failures.count) 项未移动，请展开查看原因")
+                    Text("\(report.failures.count) 项没清掉，原因也写在列表里")
                         .font(.system(size: 12.5))
                         .foregroundStyle(Theme.ink2)
                 }
@@ -1638,8 +1678,26 @@ struct MainView: View {
     }
 
     private func tagText(_ item: ScanItem) -> String {
+        if let reason = store.failureReasons[item.id] { return "没清掉：\(reason)" }
+        if store.isDecidable(item) {
+            let cost: String
+            switch item.kind {
+            case .largeFile: cost = ["dmg", "pkg"].contains(item.url.pathExtension.lowercased()) ? "安装包，可以删" : "大文件，删不删由你决定"
+            default: cost = store.policy.modelName(item.url) != nil ? "删了要重新下载" : "删了要重新安装依赖"
+            }
+            return [Self.idle(item.modified), cost].compactMap { $0 }.joined(separator: "，")
+        }
         guard item.canTrash else { return item.kind.label }
         return item.risk == .a ? "可重新生成" : "应用缓存，需先退出应用"
+    }
+
+    /// "5 个月没动过" once something has sat untouched for a month; nil when recent or unknown.
+    static func idle(_ date: Date?) -> String? {
+        guard let date else { return nil }
+        let days = Int(Date().timeIntervalSince(date) / 86_400)
+        if days < 30 { return nil }
+        if days < 365 { return "\(days / 30) 个月没动过" }
+        return days < 730 ? "一年多没动过" : "\(days / 365) 年多没动过"
     }
 
     /// The top-level place being scanned ("~/.workbuddy", "~/Library/Caches/Google"), not the deep file path.
@@ -1710,8 +1768,11 @@ struct MainView: View {
     // MARK: Confirmation sheet
 
     private var cleanupReviewSheet: some View {
-        let items = store.selectedCleanupItems
+        // Items the user decides about go first, each with what deleting it costs.
+        let decided = store.selectedDecidedItems
+        let items = decided + store.selectedCleanupItems.filter { !store.isDecidable($0) }
         let quit = store.appsToQuit
+        let listHeight = items.reduce(CGFloat(0)) { $0 + (store.isDecidable($1) ? 72 : 52) }
         return VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 14) {
                 Image(systemName: "trash.circle.fill")
@@ -1744,6 +1805,9 @@ struct MainView: View {
                                     .lineLimit(1)
                                     .truncationMode(.middle)
                                     .textSelection(.enabled)
+                                if let cost = store.decisionNotes[item.id] {
+                                    Text(cost).font(.system(size: 12)).foregroundStyle(Theme.amber).lineLimit(1)
+                                }
                             }
                             Spacer(minLength: 8)
                             Text(ByteFormat.string(item.bytes)).font(.system(size: 13.5, weight: .medium)).monospacedDigit()
@@ -1754,9 +1818,15 @@ struct MainView: View {
                     }
                 }
             }
-            .frame(height: min(CGFloat(items.count) * 52, 300))
+            .frame(height: min(listHeight, 320))
             .glass(radius: 12)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            if !decided.isEmpty {
+                Toggle(isOn: $store.confirmDecided) {
+                    Text("我已确认标黄的 \(decided.count) 项可以删").font(.system(size: 13, weight: .medium))
+                }
+                .toggleStyle(.checkbox)
+            }
             HStack {
                 Text("本应用不会清空废纸篓，什么时候清空由你决定。")
                     .font(.system(size: 12))
@@ -1767,7 +1837,7 @@ struct MainView: View {
                     .keyboardShortcut(.cancelAction)
                 Button("确认移入废纸篓") { store.trashSelectedItems() }
                     .buttonStyle(CTAButtonStyle())
-                    .disabled(items.isEmpty)
+                    .disabled(items.isEmpty || (!decided.isEmpty && !store.confirmDecided))
                     .keyboardShortcut(.defaultAction)
             }
         }

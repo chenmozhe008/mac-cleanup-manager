@@ -75,12 +75,12 @@ struct DiskScanner: Sendable {
 
         if !metadata.isDirectory {
             if policy.isProject(url), !insideProject, url != root, metadata.size >= minProjectBytes {
-                emit(&items, item(url, kind: .project, bytes: metadata.size, note: "这是工程文件。这里只显示占用，不提供删除。", canTrash: false, identity: metadata.identity))
+                emit(&items, item(url, kind: .project, bytes: metadata.size, note: "这是工程文件。这里只显示占用，不提供删除。", canTrash: false, identity: metadata.identity, modified: metadata.modified))
             } else if !insideProject, url != root,
                       metadata.size >= largeFileThreshold || (metadata.size >= 100_000_000 && ["dmg", "pkg"].contains(url.pathExtension.lowercased())) {
                 let installer = ["dmg", "pkg"].contains(url.pathExtension.lowercased())
-                let note = installer ? "安装包可能是旧版本，也可能是要留着的交付资料。这里只显示占用，请在访达里自己判断。" : "这是一个大文件。这里只显示占用，要不要处理请在访达里自己决定。"
-                emit(&items, item(url, kind: .largeFile, bytes: metadata.size, note: note, canTrash: false, identity: metadata.identity))
+                let note = installer ? "安装包可能是旧版本，也可能是要留着的交付资料。要不要删由你决定。" : "这是一个大文件。要不要删由你决定，删之前请确认它不是还要用的素材或资料。"
+                emit(&items, item(url, kind: .largeFile, bytes: metadata.size, note: note, canTrash: false, identity: metadata.identity, modified: metadata.modified))
             }
             return metadata.size
         }
@@ -114,35 +114,37 @@ struct DiskScanner: Sendable {
                 // Too small to be worth listing; still counted in the parent total.
             } else if project {
                 let note = url.lastPathComponent == "Figma" ? "Figma 的本地数据，可能包含还没同步的离线改动。这里只显示占用，请在 Figma 里处理。" : "项目工程或应用数据。这里只显示占用，不提供删除。"
-                emit(&items, item(url, kind: .project, bytes: sum, note: note, canTrash: false, identity: metadata.identity))
+                emit(&items, item(url, kind: .project, bytes: sum, note: note, canTrash: false, identity: metadata.identity, modified: metadata.modified))
             } else if let reviewNote {
                 if url.path == policy.home.appending(path: "Library/Application Support/Shandianshuo/recordings").path {
                     let old = oldRecordingSummary(at: url)
                     if old.count > 0 {
-                        emit(&items, item(url, kind: .review, bytes: old.bytes, note: "超过 15 天的录音 \(old.count) 条。\(reviewNote)", canTrash: false, identity: metadata.identity))
+                        emit(&items, item(url, kind: .review, bytes: old.bytes, note: "超过 15 天的录音 \(old.count) 条。\(reviewNote)", canTrash: false, identity: metadata.identity, modified: metadata.modified))
                     }
                 } else {
-                    // Caches found inside are listed on their own; the read-only row counts the rest.
+                    // Caches and single models found inside are listed on their own; the read-only row counts the rest.
                     let prefix = url.path + "/"
-                    let cached = items.filter { $0.kind == .cache && $0.url.path.hasPrefix(prefix) }.reduce(Int64(0)) { $0 + $1.bytes }
+                    let ownRow = { (found: ScanItem) in found.kind == .cache || policy.modelName(found.url) != nil }
+                    let cached = items.filter { ownRow($0) && $0.url.path.hasPrefix(prefix) }.reduce(Int64(0)) { $0 + $1.bytes }
                     let remaining = max(sum - cached, 0)
                     let tool = CreativeApp.dataOwner(url, home: policy.home) != nil
                     if remaining >= (tool ? minToolDataBytes : minReviewBytes) || CreativeApp.isReviewCache(url) {
-                        items.removeAll { $0.kind != .cache && $0.url.path.hasPrefix(prefix) }
-                        emit(&items, item(url, kind: .review, bytes: remaining, note: reviewNote, canTrash: false, identity: metadata.identity))
+                        items.removeAll { !ownRow($0) && $0.url.path.hasPrefix(prefix) }
+                        emit(&items, item(url, kind: .review, bytes: remaining, note: reviewNote, canTrash: false, identity: metadata.identity, modified: metadata.modified))
                     }
                 }
             } else if let cacheNote, sum > 0 {
                 // Hide descendants of a suggested cache to avoid overlapping actions.
                 items.removeAll { $0.url.path.hasPrefix(url.path + "/") }
-                emit(&items, item(url, kind: .cache, bytes: sum, note: cacheNote, canTrash: true, identity: metadata.identity))
+                emit(&items, item(url, kind: .cache, bytes: sum, note: cacheNote, canTrash: true, identity: metadata.identity, modified: metadata.modified))
             }
         }
         return sum
     }
 
-    private func item(_ url: URL, kind: ScanKind, bytes: Int64, note: String, canTrash: Bool, identity: FileIdentity) -> ScanItem {
-        ScanItem(id: url, url: url, kind: kind, risk: policy.risk(for: url, kind: kind), bytes: bytes, note: note, canTrash: canTrash, identity: identity)
+    private func item(_ url: URL, kind: ScanKind, bytes: Int64, note: String, canTrash: Bool, identity: FileIdentity, modified: Date) -> ScanItem {
+        ScanItem(id: url, url: url, kind: kind, risk: policy.risk(for: url, kind: kind), bytes: bytes, note: note, canTrash: canTrash,
+                 identity: identity, modified: modified)
     }
 
     private func oldRecordingSummary(at root: URL) -> (count: Int, bytes: Int64) {
@@ -160,11 +162,12 @@ struct DiskScanner: Sendable {
         return (count, bytes)
     }
 
-    private func metadata(_ url: URL) throws -> (identity: FileIdentity, isDirectory: Bool, isLink: Bool, size: Int64) {
+    private func metadata(_ url: URL) throws -> (identity: FileIdentity, isDirectory: Bool, isLink: Bool, size: Int64, modified: Date) {
         var info = stat()
         guard lstat(url.path, &info) == 0 else { throw ScanError.unreadable(url) }
         let type = info.st_mode & mode_t(S_IFMT)
-        return (FileIdentity(device: UInt64(info.st_dev), inode: UInt64(info.st_ino)), type == mode_t(S_IFDIR), type == mode_t(S_IFLNK), max(0, info.st_size))
+        let modified = Date(timeIntervalSince1970: TimeInterval(info.st_mtimespec.tv_sec))
+        return (FileIdentity(device: UInt64(info.st_dev), inode: UInt64(info.st_ino)), type == mode_t(S_IFDIR), type == mode_t(S_IFLNK), max(0, info.st_size), modified)
     }
 
     private func identity(_ url: URL) throws -> FileIdentity { try metadata(url).identity }

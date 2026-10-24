@@ -27,6 +27,10 @@ enum ItemPresentation {
         ".pytest_cache": ("pytest 缓存", "chevron.left.forwardslash.chevron.right"),
         ".mypy_cache": ("mypy 缓存", "chevron.left.forwardslash.chevron.right"),
         "node_modules": ("Node 依赖", "shippingbox.fill"),
+        ".venv": ("Python 虚拟环境", "shippingbox.fill"),
+        "venv": ("Python 虚拟环境", "shippingbox.fill"),
+        "target": ("Rust 构建产物", "gearshape.2.fill"),
+        "DerivedData": ("Xcode 构建缓存", "hammer.fill"),
         "recordings": ("闪电说旧录音", "waveform"),
         "Service Worker": ("Notion 离线缓存", "doc.text.fill")
     ]
@@ -52,6 +56,7 @@ enum ItemPresentation {
         let name = item.name
         if name == "Render Files" { return "渲染文件 · \(item.url.deletingLastPathComponent().lastPathComponent)" }
         if name == "CacheClip" { return "渲染缓存 CacheClip" }
+        if let model = SafetyPolicy().modelName(item.url) { return "模型 \(model)" }
         if !item.canTrash { return "本地数据" }
         if name.hasPrefix("Disk Cache") { return "磁盘缓存" }
         if name.hasPrefix("Media Cache") { return "媒体缓存" }

@@ -170,7 +170,8 @@ struct CreativeApp: Hashable, Sendable, Identifiable {
     static let openclaw = CreativeApp("openclaw", "OpenClaw", .aiCode, roots: [".openclaw"])
 
     // 本地模型
-    static let ollama = CreativeApp("ollama", "Ollama", .localModel, apps: ["com.electron.ollama", "Ollama"], folders: ["Ollama"], roots: [".ollama"])
+    static let ollama = CreativeApp("ollama", "Ollama", .localModel, apps: ["com.electron.ollama", "Ollama"], folders: ["Ollama"], roots: [".ollama"],
+                                    cleanHow: "Ollama 的模型文件互相共用，要在终端用 ollama rm 删除，这里只统计")
     static let lmStudio = CreativeApp("lmstudio", "LM Studio", .localModel, apps: ["LM Studio"], folders: ["LM Studio"], roots: [".lmstudio", ".cache/lm-studio"])
     static let localModels = CreativeApp("huggingface", "Hugging Face 模型", .localModel, short: "Hugging Face", roots: [".cache/huggingface"])
     static let jan = CreativeApp("jan", "Jan", .localModel, apps: ["Jan"], folders: ["Jan"], roots: ["jan"])

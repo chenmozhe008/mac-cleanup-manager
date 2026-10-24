@@ -5,7 +5,18 @@ import SwiftUI
 @MainActor
 final class ScanStore: ObservableObject {
     @Published var root = FileManager.default.homeDirectoryForCurrentUser
-    @Published var result: ScanResult?
+    @Published var result: ScanResult? {
+        didSet { decisionNotes = Self.decisionNotes(for: result, policy: policy) }
+    }
+    /// Items the user may delete after confirming, with what deleting costs (see `SafetyPolicy.decisionNote`).
+    @Published private(set) var decisionNotes: [URL: String] = [:]
+    /// Why an item could not be moved in the last cleanup; shown on its row until the next scan.
+    @Published var failureReasons: [URL: String] = [:]
+    /// What the last cleanup moved, so it can be put back. Dropped on rescan or switching location.
+    @Published private(set) var undoable: [TrashedItem] = []
+    @Published var isRestoring = false
+    /// The "我已确认" box in the cleanup sheet, required when the selection holds items the user decides about.
+    @Published var confirmDecided = false
     @Published var isScanning = false
     @Published var progress = ScanProgress(scannedCount: 0, currentFolder: "")
     @Published var message: String?
@@ -107,6 +118,7 @@ final class ScanStore: ObservableObject {
 
     var selectedItem: ScanItem? { displayedItems.first { $0.id == selectedID } }
 
+    /// Regenerable caches: the ones "全选" and the free-space card count.
     var eligibleItems: [ScanItem] {
         result?.items.filter { $0.kind == .cache && $0.canTrash } ?? []
     }
@@ -116,8 +128,25 @@ final class ScanStore: ObservableObject {
         displayedItems.filter { $0.kind == .cache && $0.canTrash }
     }
 
+    func isDecidable(_ item: ScanItem) -> Bool { decisionNotes[item.id] != nil }
+
+    /// Caches, plus items the user may delete after confirming. Never picked by "全选".
+    func isSelectable(_ item: ScanItem) -> Bool { (item.kind == .cache && item.canTrash) || isDecidable(item) }
+
+    var selectableInFilter: [ScanItem] { displayedItems.filter(isSelectable) }
+
     var selectedCleanupItems: [ScanItem] {
-        eligibleItems.filter { selectedCleanupIDs.contains($0.id) }
+        result?.items.filter { selectedCleanupIDs.contains($0.id) && isSelectable($0) } ?? []
+    }
+
+    var selectedDecidedItems: [ScanItem] { selectedCleanupItems.filter(isDecidable) }
+
+    private static func decisionNotes(for result: ScanResult?, policy: SafetyPolicy) -> [URL: String] {
+        var notes: [URL: String] = [:]
+        for item in result?.items ?? [] {
+            if let note = policy.decisionNote(for: item) { notes[item.id] = note }
+        }
+        return notes
     }
 
     var selectedCleanupBytes: Int64 { Self.sum(selectedCleanupItems) }
@@ -155,8 +184,7 @@ final class ScanStore: ObservableObject {
     // MARK: Selection
 
     func setCleanupSelected(_ item: ScanItem, selected: Bool) {
-        guard !isCleaning, item.kind == .cache, item.canTrash,
-              eligibleItems.contains(where: { $0.id == item.id }) else { return }
+        guard !isCleaning, isSelectable(item), result?.items.contains(where: { $0.id == item.id }) == true else { return }
         if selected {
             selectedCleanupIDs.insert(item.id)
         } else {
@@ -177,13 +205,20 @@ final class ScanStore: ObservableObject {
 
     func setGroupSelected(_ items: [ScanItem], selected: Bool) {
         guard !isCleaning else { return }
-        let ids = items.filter { $0.kind == .cache && $0.canTrash }.map(\.id)
+        let ids = items.filter(isSelectable).map(\.id)
         if selected { selectedCleanupIDs.formUnion(ids) } else { selectedCleanupIDs.subtract(ids) }
     }
 
     func clearCleanupSelection() {
         guard !isCleaning else { return }
-        selectedCleanupIDs.subtract(eligibleInFilter.map(\.id))
+        selectedCleanupIDs.subtract(selectableInFilter.map(\.id))
+    }
+
+    func reviewCleanup() {
+        guard !selectedCleanupItems.isEmpty, !isCleaning else { return }
+        hoveredID = nil
+        confirmDecided = false
+        showTrashConfirmation = true
     }
 
     var isOverview: Bool { filter != .creative && filter != .chat }
@@ -240,6 +275,8 @@ final class ScanStore: ObservableObject {
         selectedCleanupIDs.removeAll()
         message = nil
         cleanupReport = nil
+        failureReasons = [:]
+        undoable = []
         isScanning = false
         progress = ScanProgress(scannedCount: 0, currentFolder: "")
     }
@@ -323,6 +360,8 @@ final class ScanStore: ObservableObject {
             message = nil
             cleanupReport = nil
         }
+        failureReasons = [:]
+        undoable = []
         let thisScan = UUID()
         scanID = thisScan
         let scanRoot = root
@@ -361,7 +400,7 @@ final class ScanStore: ObservableObject {
                 case .success(let value):
                     self.result = value
                     self.selectedCleanupIDs.removeAll()
-                    self.filter = ItemFilter.allCases.first { category in value.items.contains { category.contains($0) } } ?? .caches
+                    // Stay on the category being viewed; a rescan should not move the user elsewhere.
                     self.selectedID = nil
                     self.scanSizes[self.scopeKey] = value.scannedCount
                     self.saveResult(value)
@@ -414,7 +453,8 @@ final class ScanStore: ObservableObject {
         let checkedItems = value.items.map { item in
             guard item.canTrash, policy.cacheDescription(for: item.url, isDirectory: true) == nil else { return item }
             return ScanItem(id: item.id, url: item.url, kind: .review, risk: .c, bytes: item.bytes,
-                            note: "清理规则已更新，此位置仅显示占用。重新扫描可更新结果。", canTrash: false, identity: item.identity)
+                            note: "清理规则已更新，此位置仅显示占用。重新扫描可更新结果。", canTrash: false, identity: item.identity,
+                            modified: item.modified)
         }
         result = ScanResult(root: value.root, isQuickScan: value.isQuickScan, items: checkedItems,
                             totalBytes: value.totalBytes, volumeTotalBytes: value.volumeTotalBytes,
@@ -454,8 +494,10 @@ final class ScanStore: ObservableObject {
         message = nil
         cleanupReport = nil
         let scanPolicy = policy
+        failureReasons = [:]
+        undoable = []
         Task.detached(priority: .userInitiated) { [weak self] in
-            var moved: [URL] = []
+            var moved: [TrashedItem] = []
             var movedBytes: Int64 = 0
             var failures: [CleanupReport.Failure] = []
             let service = TrashService(policy: scanPolicy)
@@ -464,8 +506,8 @@ final class ScanStore: ObservableObject {
                     if await MainActor.run(body: { ItemPresentation.runningOwner(of: item) != nil }) {
                         throw TrashError.inUse
                     }
-                    _ = try service.moveToTrash(item)
-                    moved.append(item.id)
+                    let trashed = try service.moveToTrash(item)
+                    moved.append(TrashedItem(item: item, trashed: trashed))
                     let addition = movedBytes.addingReportingOverflow(item.bytes)
                     movedBytes = addition.overflow ? Int64.max : addition.partialValue
                 } catch {
@@ -477,12 +519,73 @@ final class ScanStore: ObservableObject {
             await MainActor.run {
                 guard let self else { return }
                 self.isCleaning = false
-                self.selectedCleanupIDs.subtract(moved)
+                let movedIDs = Set(moved.map(\.item.id))
+                self.selectedCleanupIDs.subtract(movedIDs)
+                // No rescan: drop what moved and keep the user where they were. Failed items stay, with the reason.
+                self.updateResult(removing: movedIDs, adding: [])
+                self.failureReasons = Dictionary(failures.map { ($0.id, $0.reason) }, uniquingKeysWith: { first, _ in first })
+                self.undoable = moved
                 self.cleanupReport = CleanupReport(movedCount: moved.count, movedBytes: movedBytes, failures: failures)
-                if !moved.isEmpty { self.scan(clearMessage: false) }
             }
         }
     }
+
+    /// Puts the last cleanup back where it was. Skips anything whose original place is taken again.
+    func undoLastCleanup() {
+        let entries = undoable
+        guard !entries.isEmpty, !isCleaning, !isRestoring else { return }
+        isRestoring = true
+        Task.detached(priority: .userInitiated) { [weak self] in
+            var restored: [ScanItem] = []
+            var skipped = 0
+            for entry in entries {
+                let original = entry.item.url
+                if FileManager.default.fileExists(atPath: original.path) || !FileManager.default.fileExists(atPath: entry.trashed.path) {
+                    skipped += 1
+                    continue
+                }
+                do {
+                    try FileManager.default.moveItem(at: entry.trashed, to: original)
+                    restored.append(entry.item)
+                } catch {
+                    skipped += 1
+                }
+            }
+            await MainActor.run {
+                guard let self else { return }
+                self.isRestoring = false
+                self.undoable = []
+                self.cleanupReport = nil
+                self.updateResult(removing: [], adding: restored)
+                self.message = skipped == 0 ? "已放回原处 \(restored.count) 项" : "已放回 \(restored.count) 项，\(skipped) 项原位置已有新文件或已不在废纸篓，没有放回"
+            }
+        }
+    }
+
+    func openTrash() {
+        NSWorkspace.shared.open(policy.home.appending(path: ".Trash"))
+    }
+
+    /// Edits the shown result in place after a cleanup or undo, and saves it as this location's result.
+    private func updateResult(removing ids: Set<URL>, adding items: [ScanItem]) {
+        guard let value = result, !(ids.isEmpty && items.isEmpty) else { return }
+        let kept = value.items.filter { !ids.contains($0.id) }
+        let removedBytes = Self.sum(value.items.filter { ids.contains($0.id) })
+        let all = (kept + items.filter { item in !kept.contains { $0.id == item.id } }).sorted { $0.bytes > $1.bytes }
+        let total = max(value.totalBytes - removedBytes, 0).addingReportingOverflow(Self.sum(items))
+        let updated = ScanResult(root: value.root, isQuickScan: value.isQuickScan, items: all,
+                                 totalBytes: total.overflow ? Int64.max : total.partialValue, volumeTotalBytes: value.volumeTotalBytes,
+                                 volumeFreeBytes: value.volumeFreeBytes, skippedCount: value.skippedCount,
+                                 scannedCount: value.scannedCount, scannedAt: value.scannedAt, chatApps: value.chatApps)
+        result = updated
+        saveResult(updated)
+    }
+}
+
+struct TrashedItem: Sendable {
+    let item: ScanItem
+    /// Where macOS put it in the Trash.
+    let trashed: URL
 }
 
 enum ItemFilter: String, CaseIterable, Identifiable {
