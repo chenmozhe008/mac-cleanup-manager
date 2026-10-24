@@ -31,6 +31,36 @@ struct TrashService {
         return resultingURL as URL? ?? url
     }
 
+    /// Moves items one at a time; anything whose app is running, changed or in use is reported, not moved.
+    /// Call off the main actor.
+    static func moveAll(_ items: [ScanItem], policy: SafetyPolicy, progress: @Sendable (Int) async -> Void = { _ in }) async -> CleanupOutcome {
+        var outcome = CleanupOutcome()
+        let service = TrashService(policy: policy)
+        for item in items {
+            do {
+                if await MainActor.run(body: { ItemPresentation.runningOwner(of: item) != nil }) { throw TrashError.inUse }
+                let trashed = try service.moveToTrash(item)
+                outcome.moved.append(TrashedItem(item: item, trashed: trashed))
+                let addition = outcome.bytes.addingReportingOverflow(item.bytes)
+                outcome.bytes = addition.overflow ? Int64.max : addition.partialValue
+            } catch {
+                outcome.failures.append(CleanupReport.Failure(id: item.id, name: item.name, reason: reason(for: error)))
+            }
+            await progress(outcome.moved.count + outcome.failures.count)
+        }
+        return outcome
+    }
+
+    /// Moves trashed items back. Skips any whose original place is taken again or that left the Trash.
+    /// Returns, per entry, whether it went back.
+    static func putBack(_ entries: [(original: URL, trashed: URL)]) -> [Bool] {
+        entries.map { entry in
+            let manager = FileManager.default
+            guard !manager.fileExists(atPath: entry.original.path), manager.fileExists(atPath: entry.trashed.path) else { return false }
+            return (try? manager.moveItem(at: entry.trashed, to: entry.original)) != nil
+        }
+    }
+
     /// Fail closed when the OS cannot establish that no process has files open here.
     static func ensureUnused(_ url: URL, isDirectory: Bool = true) throws {
         let process = Process()
@@ -70,6 +100,14 @@ struct TrashService {
         }
         return "移动失败"
     }
+}
+
+struct CleanupOutcome: Sendable {
+    var moved: [TrashedItem] = []
+    var failures: [CleanupReport.Failure] = []
+    var bytes: Int64 = 0
+
+    var report: CleanupReport { CleanupReport(movedCount: moved.count, movedBytes: bytes, failures: failures) }
 }
 
 enum TrashError: LocalizedError {

@@ -25,6 +25,8 @@ struct DecisionTierTests {
 
         let store = ScanStore()
         store.result = try DiskScanner(policy: SafetyPolicy(home: home)).scan(home)
+        // Tests share one defaults domain; never inherit another test's last category.
+        store.filter = .caches
         let node = try #require(store.result?.items.first { $0.url.path == CanonicalPath.url(dependencies).path })
         #expect(!node.canTrash && store.isDecidable(node) && store.isSelectable(node))
         store.selectAllEligible()

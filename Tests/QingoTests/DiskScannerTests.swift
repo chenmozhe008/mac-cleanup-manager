@@ -137,6 +137,8 @@ struct DiskScannerTests {
 
         let store = ScanStore()
         store.result = try DiskScanner(policy: SafetyPolicy(home: root)).scan(root)
+        // Tests share one defaults domain; never inherit another test's last category.
+        store.filter = .caches
         store.selectAllEligible()
         #expect(store.selectedCleanupItems.count == 1)
         #expect(store.selectedCleanupItems.first?.url.path == CanonicalPath.url(build).path)

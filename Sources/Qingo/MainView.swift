@@ -10,7 +10,7 @@ struct MainView: View {
     @ObservedObject var store: ScanStore
 
     var hasResult: Bool { store.result != nil && !store.isScanning }
-    var showSidebar: Bool { !store.isScanning && (store.result != nil || store.hasHistory) }
+    var showSidebar: Bool { !store.isScanning && (store.result != nil || store.hasHistory || store.tool != nil) }
     var home: URL { FileManager.default.homeDirectoryForCurrentUser }
 
     var body: some View {
@@ -22,7 +22,12 @@ struct MainView: View {
                     .overlay(alignment: .trailing) { Rectangle().fill(Theme.line).frame(width: 1) }
             }
             Group {
-                if store.isScanning {
+                if let tool = store.tool, !store.isScanning {
+                    switch tool {
+                    case .uninstall: UninstallView(store: store.uninstaller, appearance: store.appearance)
+                    case .dev: DevProjectsView(store: store.dev, appearance: store.appearance)
+                    }
+                } else if store.isScanning {
                     scanningView
                 } else if let result = store.result {
                     resultView(result)
@@ -387,6 +392,10 @@ struct MainView: View {
                     }
                     addFolderRow
 
+                    sectionHeader("工具").padding(.top, 12)
+                    toolRow("卸载应用", icon: "minus.circle", page: .uninstall)
+                    toolRow("开发工程", icon: "chevron.left.forwardslash.chevron.right", page: .dev)
+
                     if store.result != nil {
                         sectionHeader("分类").padding(.top, 12)
                     }
@@ -459,8 +468,30 @@ struct MainView: View {
         .padding(.top, 10)
     }
 
+    private func toolRow(_ title: String, icon: String, page: ScanStore.ToolPage) -> some View {
+        let active = store.tool == page
+        return Button { withAnimation(.easeOut(duration: 0.15)) { store.openTool(page) } } label: {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(width: 24)
+                    .foregroundStyle(active ? Theme.cyan : Theme.ink2)
+                Text(title)
+                Spacer(minLength: 4)
+            }
+            .font(.system(size: 14))
+            .foregroundStyle(active ? Theme.ink : Theme.ink2)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(active ? Theme.fill(0.08) : .clear))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(store.isCleaning)
+    }
+
     private var overviewRow: some View {
-        let active = store.isOverview
+        let active = store.isOverview && store.tool == nil
         return Button { withAnimation(.easeOut(duration: 0.15)) { store.showOverview() } } label: {
             HStack(spacing: 10) {
                 Image(systemName: "circle.lefthalf.filled")
@@ -490,7 +521,7 @@ struct MainView: View {
 
     /// Clicking only switches to the location and shows its last result; scanning starts from the scan button.
     private func locationRow(_ title: String, icon: String, url: URL, quick: Bool, removable: Bool = false) -> some View {
-        let active = store.isCurrentScope(url, quick: quick)
+        let active = store.tool == nil && store.isCurrentScope(url, quick: quick)
         let hovered = removable && store.hoveredID == url
         return Button { withAnimation(.easeOut(duration: 0.15)) { store.selectLocation(url, quick: quick) } } label: {
             HStack(spacing: 10) {
@@ -557,7 +588,7 @@ struct MainView: View {
     }
 
     private func categoryRow(_ category: ItemFilter, bytes: Int64) -> some View {
-        let selected = store.filter == category
+        let selected = store.tool == nil && store.filter == category
         let tint = Theme.color(category)
         return Button { withAnimation(.easeOut(duration: 0.15)) { store.selectCategory(category) } } label: {
             HStack(spacing: 10) {

@@ -26,7 +26,8 @@
 - 打包：`./script/build_and_run.sh --package` → `dist/小清.app`
 - 安装：覆盖到 `~/Applications/小清.app`（用户日常从这里打开）
 - `dist/` 里只保留这一个 App；旧名字的包（如 `MacSpaceKeeper.app`）会被误开成旧版，发现就清掉
-- `swift test` 在只有命令行工具（无 Xcode）的环境下会报 TestingMacros 插件缺失，属于环境问题
+- `swift test` 在只有命令行工具（无 Xcode）的环境下会报 TestingMacros 插件缺失，属于环境问题；用 `./script/test.sh`
+- 测试共用一个 defaults 域且并行跑：测 `ScanStore` 选择逻辑时要显式设 `store.filter`，别依赖默认分类
 
 ## 界面结构（2026-10-20 定稿：效果图 B「沉浸品牌感」）
 
@@ -62,7 +63,7 @@
 
 - 截图只截本 App 窗口：按 PID 取最大窗口 ID → `screencapture -l <id>`（不受其他窗口遮挡）
 - 切分类：`defaults write io.github.chenmozhe008.qingo lastFilter "<分类名>"` 后重开 App；**不要用模拟鼠标点击**，用户可能在用电脑（2026-10-20 点到过微信）
-- 启动参数：`open -g "dist/小清.app" --args --scan`（启动即重新扫描）、`--show-about` / `--show-about=反馈`（直接打开「关于」某一页）
+- 启动参数：`open -g "dist/小清.app" --args --scan`（启动即重新扫描）、`--show-about` / `--show-about=反馈`（直接打开「关于」某一页）、`--tool=uninstall`（可加 `--select-app=<App 名>` 或 `--orphans`）/ `--tool=dev`（可加 `--dev-scan`）直接打开工具页
 - 关于页下方内容（对比表）滚不到：临时把 `comparisonTable` 挪到 intro 顶部截图，截完还原
 
 ## 图标
@@ -88,6 +89,22 @@
 - 没清掉的留在列表里，行内用琥珀色写原因（`ScanStore.failureReasons`），退出相关应用后可直接再清
 - 结果条提供「撤销」（按 `trashItem` 返回的位置挪回原处，原位置已有新文件就跳过）和「打开废纸篓」，并写明清空废纸篓后才腾出空间；撤销记录在重新扫描/切换位置后作废
 - 重新扫描后保持当前分类，不再跳到第一个有内容的分类
+
+## 工具：卸载应用 / 开发工程（2026-10-24 用户定，效果图 `output/mockups/i-uninstall.png`、`i-dev.png`）
+
+左栏「扫描位置」下方「工具」分组两项，各自独立页面和扫描，不进总览 3×2 卡片、不动分类（`ScanStore.tool`，非 nil 时右侧显示工具页；点位置/分类/总览回到扫描结果）。
+
+**卸载应用**（`AppUninstaller.swift`）
+- 列 /Applications、~/Applications（含下一层子文件夹）里的 App；排除 `com.apple.*`、小清自己。左列表按大小 / 按多久没用（Spotlight `kMDItemLastUsedDate`），搜索；右侧是选中 App 的全部痕迹
+- 痕迹只在 ~/Library 的固定子目录按 bundle id / App 名精确找：Application Support、Caches、Preferences（`<id>.plist` 和 `<id>.*.plist`）、Saved Application State、HTTPStorages、WebKit、Cookies、Logs、LaunchAgents（文件名以 id 开头或 plist 里指向该 App）。默认全勾（**偏好设置也勾**，用户定）；`CreativeApp` 认识的工具，其 Application Support 目录和 `roots` 算「工具数据」**默认不勾**
+- Containers / Group Containers 不读不删（读会弹授权），存在就提示去访达手动删；`SafetyPolicy.isProtected` 的路径跳过
+- 正在运行的 App 不让卸载；App 本身用 `NSWorkspace.recycle`（root 所有的 App 系统会要密码），其余用 `trashItem`，删前核对身份和占用；全部进废纸篓，可撤销
+- 「已删除应用的残留」：上述目录里 bundle id 形状（≥3 段、非 com.apple./group.）、且**没有任何已装 App 同厂商前缀（前两段）**、LaunchServices 也找不到的条目，按 id 合并成一行；算第二档，默认不勾、确认后删
+
+**开发工程**（`DevProjects.swift`）
+- 默认扫 ~/Coding（`devRoot`，可「更换文件夹…」，用户定只看这一个）；工程＝含 package.json / Cargo.toml / Package.swift / pyproject.toml / requirements.txt / go.mod / build.gradle / Podfile / pubspec.yaml / .git 的目录，产物归到离扫描根最近的那个工程（monorepo 合成一张卡）
+- 产物沿用 `SafetyPolicy`：构建缓存是第一档（新增 `.turbo`、`.parcel-cache`、`.nuxt`、`.svelte-kit`、`.ruff_cache`、旁边有 build.gradle 的 `.gradle`），`node_modules` / 虚拟环境是第二档；代码不碰
+- 「多久没动」＝工程里产物和 .git 以外文件的最新修改时间；筛选「全部（默认）/ 3 个月以上 / 半年以上」；后两档才有「选中这 N 个工程」（只选该筛选下的产物）；工程产物合计 < 20 MB 不列；结果存 `results/dev.json`
 
 ## 清理结果提示
 

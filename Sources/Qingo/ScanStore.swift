@@ -58,6 +58,19 @@ final class ScanStore: ObservableObject {
         }
     }
 
+    enum ToolPage { case uninstall, dev }
+    /// A tool page shown instead of the scan result; nil shows the scan result.
+    @Published var tool: ToolPage?
+    let dev = DevStore()
+    let uninstaller = UninstallStore()
+
+    func openTool(_ page: ToolPage) {
+        guard !isScanning, !isCleaning else { return }
+        tool = page
+        selectedID = nil
+        if page == .uninstall { uninstaller.loadIfNeeded() }
+    }
+
     let policy = SafetyPolicy()
     private var scanID = UUID()
     private var scanTask: Task<Void, Never>?
@@ -85,6 +98,13 @@ final class ScanStore: ObservableObject {
             aboutTab = AboutTab(rawValue: String(about.drop { $0 != "=" }.dropFirst())) ?? .intro
         }
         if arguments.contains("--scan") { scan() }
+        // `--tool=uninstall` / `--tool=dev` (add `--dev-scan` to rescan the dev folder).
+        if let page = arguments.first(where: { $0.hasPrefix("--tool=") }) {
+            uninstaller.pendingSelection = arguments.first { $0.hasPrefix("--select-app=") }.map { String($0.dropFirst("--select-app=".count)) }
+            if arguments.contains("--orphans") { uninstaller.selectOrphans() }
+            openTool(page.hasSuffix("dev") ? .dev : .uninstall)
+            if arguments.contains("--dev-scan") { dev.scan() }
+        }
     }
 
     // MARK: Derived data
@@ -174,7 +194,7 @@ final class ScanStore: ObservableObject {
         return min(Double(progress.scannedCount) / Double(expected), 0.99)
     }
 
-    static func sum(_ items: [ScanItem]) -> Int64 {
+    nonisolated static func sum(_ items: [ScanItem]) -> Int64 {
         items.reduce(0) { sum, item in
             let addition = sum.addingReportingOverflow(item.bytes)
             return addition.overflow ? Int64.max : addition.partialValue
@@ -224,11 +244,13 @@ final class ScanStore: ObservableObject {
     var isOverview: Bool { filter != .creative && filter != .chat }
 
     func showOverview() {
+        tool = nil
         if !isOverview { filter = .caches }
         selectedID = nil
     }
 
     func selectCategory(_ category: ItemFilter) {
+        tool = nil
         filter = category
         selectedID = nil
     }
@@ -284,6 +306,12 @@ final class ScanStore: ObservableObject {
     /// Switch to a location and show its last result. Scanning only starts from the scan button.
     func selectLocation(_ url: URL, quick: Bool) {
         guard !isScanning, !isCleaning else { return }
+        // Coming back from a tool page shows the location as it was.
+        if tool != nil, isCurrentScope(url, quick: quick) {
+            tool = nil
+            return
+        }
+        tool = nil
         // Clicking the location you're already on goes back to its overview.
         if isCurrentScope(url, quick: quick), result != nil {
             showOverview()
@@ -353,6 +381,7 @@ final class ScanStore: ObservableObject {
 
     func scan(clearMessage: Bool = true) {
         guard !isScanning, !isCleaning else { return }
+        tool = nil
         isScanning = true
         liveFound = []
         progress = ScanProgress(scannedCount: 0, currentFolder: root.path)
@@ -497,35 +526,19 @@ final class ScanStore: ObservableObject {
         failureReasons = [:]
         undoable = []
         Task.detached(priority: .userInitiated) { [weak self] in
-            var moved: [TrashedItem] = []
-            var movedBytes: Int64 = 0
-            var failures: [CleanupReport.Failure] = []
-            let service = TrashService(policy: scanPolicy)
-            for item in items {
-                do {
-                    if await MainActor.run(body: { ItemPresentation.runningOwner(of: item) != nil }) {
-                        throw TrashError.inUse
-                    }
-                    let trashed = try service.moveToTrash(item)
-                    moved.append(TrashedItem(item: item, trashed: trashed))
-                    let addition = movedBytes.addingReportingOverflow(item.bytes)
-                    movedBytes = addition.overflow ? Int64.max : addition.partialValue
-                } catch {
-                    failures.append(CleanupReport.Failure(id: item.id, name: item.name, reason: TrashService.reason(for: error)))
-                }
-                let count = moved.count + failures.count
+            let outcome = await TrashService.moveAll(items, policy: scanPolicy) { count in
                 await MainActor.run { self?.cleanedCount = count }
             }
             await MainActor.run {
                 guard let self else { return }
                 self.isCleaning = false
-                let movedIDs = Set(moved.map(\.item.id))
+                let movedIDs = Set(outcome.moved.map(\.item.id))
                 self.selectedCleanupIDs.subtract(movedIDs)
                 // No rescan: drop what moved and keep the user where they were. Failed items stay, with the reason.
                 self.updateResult(removing: movedIDs, adding: [])
-                self.failureReasons = Dictionary(failures.map { ($0.id, $0.reason) }, uniquingKeysWith: { first, _ in first })
-                self.undoable = moved
-                self.cleanupReport = CleanupReport(movedCount: moved.count, movedBytes: movedBytes, failures: failures)
+                self.failureReasons = Dictionary(outcome.failures.map { ($0.id, $0.reason) }, uniquingKeysWith: { first, _ in first })
+                self.undoable = outcome.moved
+                self.cleanupReport = outcome.report
             }
         }
     }
@@ -536,21 +549,9 @@ final class ScanStore: ObservableObject {
         guard !entries.isEmpty, !isCleaning, !isRestoring else { return }
         isRestoring = true
         Task.detached(priority: .userInitiated) { [weak self] in
-            var restored: [ScanItem] = []
-            var skipped = 0
-            for entry in entries {
-                let original = entry.item.url
-                if FileManager.default.fileExists(atPath: original.path) || !FileManager.default.fileExists(atPath: entry.trashed.path) {
-                    skipped += 1
-                    continue
-                }
-                do {
-                    try FileManager.default.moveItem(at: entry.trashed, to: original)
-                    restored.append(entry.item)
-                } catch {
-                    skipped += 1
-                }
-            }
+            let back = TrashService.putBack(entries.map { ($0.item.url, $0.trashed) })
+            let restored = zip(entries, back).filter(\.1).map(\.0.item)
+            let skipped = entries.count - restored.count
             await MainActor.run {
                 guard let self else { return }
                 self.isRestoring = false

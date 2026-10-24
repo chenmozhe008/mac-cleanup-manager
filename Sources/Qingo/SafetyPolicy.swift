@@ -150,8 +150,16 @@ struct SafetyPolicy: Sendable {
         if name == "target", FileManager.default.fileExists(atPath: url.deletingLastPathComponent().appending(path: "Cargo.toml").path) {
             return "Rust 的构建产物，下次构建时会重新生成。"
         }
-        if ["__pycache__", ".pytest_cache", ".mypy_cache"].contains(name) {
+        if ["__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"].contains(name) {
             return "开发工具生成的缓存，运行时会重新生成。"
+        }
+        // Front-end build caches, only next to the project manifest that produces them.
+        if let tool = Self.frontEndCaches[name], hasNodeManifest(near: url) {
+            return "\(tool) 的构建缓存，下次构建时会重新生成。"
+        }
+        if name == ".gradle", ["build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"]
+            .contains(where: { FileManager.default.fileExists(atPath: url.deletingLastPathComponent().appending(path: $0).path) }) {
+            return "Gradle 的工程缓存，下次构建时会重新生成。"
         }
         if name == "cache", url.deletingLastPathComponent().lastPathComponent == ".next" {
             return "Next.js 的构建缓存，下次构建时会重新生成。"
@@ -198,12 +206,15 @@ struct SafetyPolicy: Sendable {
         }
         // Build artifacts and tool caches regenerate on the next build/run; no app needs quitting.
         let name = url.lastPathComponent
-        if [".build", "target", "__pycache__", ".pytest_cache", ".mypy_cache"].contains(name) ||
+        if [".build", "target", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".gradle"].contains(name) ||
+            Self.frontEndCaches[name] != nil ||
             (name == "cache" && url.deletingLastPathComponent().lastPathComponent == ".next") {
             return .a
         }
         return .b
     }
+
+    static let frontEndCaches = [".turbo": "Turborepo", ".parcel-cache": "Parcel", ".nuxt": "Nuxt", ".svelte-kit": "SvelteKit"]
 
     /// What deleting this costs, for items the user may delete after confirming (not regenerable caches).
     /// nil means it is not offered for deletion here. `TrashService` re-checks this before moving anything.

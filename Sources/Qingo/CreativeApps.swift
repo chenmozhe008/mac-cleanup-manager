@@ -235,7 +235,7 @@ struct CreativeApp: Hashable, Sendable, Identifiable {
         return allCases.first { app in app.folders.contains { name.hasPrefix($0 + " ") } }
     }
 
-    private static let vendorFolders: Set<String> = ["Adobe", "Blackmagic Design"]
+    static let vendorFolders: Set<String> = ["Adobe", "Blackmagic Design"]
 
     /// Owner of a home-relative path, and whether that path lies inside the tool's ~/Library/Caches folder.
     private static func owner(relativePath: String) -> (app: CreativeApp, inCaches: Bool)? {
